@@ -1,0 +1,57 @@
+from __future__ import annotations
+
+import argparse
+
+from torch.utils.data import DataLoader
+
+from vqa_project.answers import AnswerVocab
+from vqa_project.config import load_config, resolve_device
+from vqa_project.data import VQACollator, VQADataset
+from vqa_project.engine import evaluate, load_checkpoint
+from vqa_project.hf import load_tokenizer
+from vqa_project.model import VQAModel
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Evaluate a trained VQA model.")
+    parser.add_argument("--config", default="configs/default.yaml")
+    parser.add_argument("--checkpoint", default="checkpoints/best.pt")
+    return parser.parse_args()
+
+
+def main() -> None:
+    args = parse_args()
+    config = load_config(args.config)
+    device = resolve_device(config["device"])
+    checkpoint = load_checkpoint(args.checkpoint, device)
+
+    data_cfg = config["data"]
+    model_cfg = config["model"]
+    answer_vocab = AnswerVocab(checkpoint.get("idx_to_answer") or AnswerVocab.load(data_cfg["answer_vocab_path"]).idx_to_answer)
+    tokenizer = load_tokenizer(model_cfg["text_model_name"])
+    collator = VQACollator(tokenizer, data_cfg["max_question_length"])
+
+    val_dataset = VQADataset(
+        root=data_cfg["root"],
+        split=data_cfg["val_split"],
+        answer_vocab=answer_vocab,
+        image_size=data_cfg["image_size"],
+        max_samples=data_cfg["max_val_samples"],
+        train=False,
+    )
+    val_loader = DataLoader(
+        val_dataset,
+        batch_size=config["train"]["batch_size"],
+        shuffle=False,
+        num_workers=data_cfg["num_workers"],
+        collate_fn=collator,
+    )
+
+    model = VQAModel(answer_vocab_size=len(answer_vocab), **model_cfg).to(device)
+    model.load_state_dict(checkpoint["model_state"])
+    metrics = evaluate(model, val_loader, device)
+    print(f"val_loss={metrics['loss']:.4f} val_acc={metrics['accuracy']:.4f}")
+
+
+if __name__ == "__main__":
+    main()

@@ -1,0 +1,35 @@
+seed: 42
+device: auto
+
+data:
+  root: data/vqa
+  train_split: train
+  val_split: val
+  answer_vocab_path: data/answer_vocab.json
+  answer_vocab_size: 1000
+  max_train_samples: 5000
+  max_val_samples: 1000
+  image_size: 224
+  max_question_length: 32
+  num_workers: 0
+
+model:
+  text_model_name: distilbert-base-uncased
+  hidden_dim: 512
+  num_attention_heads: 8
+  dropout: 0.2
+  freeze_backbones: true
+  pretrained_cnn: true
+
+train:
+  batch_size: 8
+  epochs: 5
+  lr: 0.0001
+  weight_decay: 0.01
+  grad_clip_norm: 1.0
+  checkpoint_dir: checkpoints
+  checkpoint_name: best.pt
+  log_every: 20
+
+infer:
+  topk: 5
