@@ -20,9 +20,14 @@ def set_seed(seed: int) -> None:
 
 def move_batch_to_device(batch: dict[str, Any], device: torch.device) -> dict[str, Any]:
     moved = {}
+    non_blocking = device.type == "cuda"
     for key, value in batch.items():
-        moved[key] = value.to(device) if torch.is_tensor(value) else value
+        moved[key] = value.to(device, non_blocking=non_blocking) if torch.is_tensor(value) else value
     return moved
+
+
+def _cuda_amp_enabled(device: torch.device, use_amp: bool) -> bool:
+    return bool(use_amp and device.type == "cuda")
 
 
 def train_one_epoch(
@@ -32,9 +37,12 @@ def train_one_epoch(
     device: torch.device,
     grad_clip_norm: float,
     log_every: int = 20,
+    use_amp: bool = False,
 ) -> dict[str, float]:
     model.train()
     criterion = nn.BCEWithLogitsLoss()
+    amp_enabled = _cuda_amp_enabled(device, use_amp)
+    scaler = torch.cuda.amp.GradScaler(enabled=amp_enabled)
     total_loss = 0.0
     total_correct = 0
     total_examples = 0
@@ -42,14 +50,18 @@ def train_one_epoch(
     progress = tqdm(dataloader, desc="train", leave=False)
     for step, batch in enumerate(progress, start=1):
         batch = move_batch_to_device(batch, device)
-        logits = model(batch["images"], batch["input_ids"], batch["attention_mask"])
-        loss = criterion(logits, batch["targets"])
-
         optimizer.zero_grad(set_to_none=True)
-        loss.backward()
+
+        with torch.cuda.amp.autocast(enabled=amp_enabled):
+            logits = model(batch["images"], batch["input_ids"], batch["attention_mask"])
+            loss = criterion(logits, batch["targets"])
+
+        scaler.scale(loss).backward()
         if grad_clip_norm > 0:
+            scaler.unscale_(optimizer)
             torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip_norm)
-        optimizer.step()
+        scaler.step(optimizer)
+        scaler.update()
 
         batch_size = batch["images"].size(0)
         predictions = logits.argmax(dim=1)
@@ -68,17 +80,24 @@ def train_one_epoch(
 
 
 @torch.no_grad()
-def evaluate(model: nn.Module, dataloader: DataLoader, device: torch.device) -> dict[str, float]:
+def evaluate(
+    model: nn.Module,
+    dataloader: DataLoader,
+    device: torch.device,
+    use_amp: bool = False,
+) -> dict[str, float]:
     model.eval()
     criterion = nn.BCEWithLogitsLoss()
+    amp_enabled = _cuda_amp_enabled(device, use_amp)
     total_loss = 0.0
     total_correct = 0
     total_examples = 0
 
     for batch in tqdm(dataloader, desc="eval", leave=False):
         batch = move_batch_to_device(batch, device)
-        logits = model(batch["images"], batch["input_ids"], batch["attention_mask"])
-        loss = criterion(logits, batch["targets"])
+        with torch.cuda.amp.autocast(enabled=amp_enabled):
+            logits = model(batch["images"], batch["input_ids"], batch["attention_mask"])
+            loss = criterion(logits, batch["targets"])
         predictions = logits.argmax(dim=1)
         labels = batch["labels"]
         batch_size = batch["images"].size(0)

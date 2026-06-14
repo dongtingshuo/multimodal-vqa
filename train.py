@@ -20,24 +20,54 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def load_or_build_answer_vocab(data_cfg: dict) -> AnswerVocab:
+    vocab_path = Path(data_cfg["answer_vocab_path"])
+    expected_size = int(data_cfg["answer_vocab_size"])
+    if vocab_path.exists():
+        answer_vocab = AnswerVocab.load(vocab_path)
+        if len(answer_vocab) == expected_size:
+            return answer_vocab
+        print(
+            f"answer vocab size changed from {len(answer_vocab)} to {expected_size}; rebuilding {vocab_path}"
+        )
+
+    train_annotations = default_annotation_path(data_cfg["root"], data_cfg["train_split"])
+    answer_vocab = build_answer_vocab(train_annotations, expected_size)
+    answer_vocab.save(vocab_path)
+    return answer_vocab
+
+
+def build_dataloader(dataset, batch_size: int, shuffle: bool, data_cfg: dict, train_cfg: dict, device: torch.device, collator):
+    num_workers = int(data_cfg.get("num_workers", 0))
+    pin_memory = bool(train_cfg.get("pin_memory", device.type == "cuda")) and device.type == "cuda"
+    persistent_workers = bool(train_cfg.get("persistent_workers", False)) and num_workers > 0
+    return DataLoader(
+        dataset,
+        batch_size=batch_size,
+        shuffle=shuffle,
+        num_workers=num_workers,
+        collate_fn=collator,
+        pin_memory=pin_memory,
+        persistent_workers=persistent_workers,
+    )
+
+
 def main() -> None:
     args = parse_args()
     config = load_config(args.config)
     set_seed(config["seed"])
     device = resolve_device(config["device"])
+    if device.type == "cuda":
+        torch.backends.cudnn.benchmark = True
+        print(f"Using CUDA GPU: {torch.cuda.get_device_name(device)}")
+    else:
+        print(f"Using device: {device}")
 
     data_cfg = config["data"]
     model_cfg = config["model"]
     train_cfg = config["train"]
 
-    vocab_path = Path(data_cfg["answer_vocab_path"])
-    if vocab_path.exists():
-        answer_vocab = AnswerVocab.load(vocab_path)
-    else:
-        train_annotations = default_annotation_path(data_cfg["root"], data_cfg["train_split"])
-        answer_vocab = build_answer_vocab(train_annotations, data_cfg["answer_vocab_size"])
-        answer_vocab.save(vocab_path)
-
+    answer_vocab = load_or_build_answer_vocab(data_cfg)
     tokenizer = load_tokenizer(model_cfg["text_model_name"])
     collator = VQACollator(tokenizer, data_cfg["max_question_length"])
 
@@ -57,20 +87,25 @@ def main() -> None:
         max_samples=data_cfg["max_val_samples"],
         train=False,
     )
+    print(f"answer_vocab={len(answer_vocab)} train_examples={len(train_dataset)} val_examples={len(val_dataset)}")
 
-    train_loader = DataLoader(
+    train_loader = build_dataloader(
         train_dataset,
         batch_size=train_cfg["batch_size"],
         shuffle=True,
-        num_workers=data_cfg["num_workers"],
-        collate_fn=collator,
+        data_cfg=data_cfg,
+        train_cfg=train_cfg,
+        device=device,
+        collator=collator,
     )
-    val_loader = DataLoader(
+    val_loader = build_dataloader(
         val_dataset,
         batch_size=train_cfg["batch_size"],
         shuffle=False,
-        num_workers=data_cfg["num_workers"],
-        collate_fn=collator,
+        data_cfg=data_cfg,
+        train_cfg=train_cfg,
+        device=device,
+        collator=collator,
     )
 
     model = VQAModel(answer_vocab_size=len(answer_vocab), **model_cfg).to(device)
@@ -90,8 +125,9 @@ def main() -> None:
             device,
             grad_clip_norm=train_cfg["grad_clip_norm"],
             log_every=train_cfg["log_every"],
+            use_amp=train_cfg.get("use_amp", False),
         )
-        val_metrics = evaluate(model, val_loader, device)
+        val_metrics = evaluate(model, val_loader, device, use_amp=train_cfg.get("use_amp", False))
         print(
             f"epoch={epoch} "
             f"train_loss={train_metrics['loss']:.4f} "

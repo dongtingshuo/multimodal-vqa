@@ -27,6 +27,7 @@ def main() -> None:
 
     data_cfg = config["data"]
     model_cfg = config["model"]
+    train_cfg = config["train"]
     answer_vocab = AnswerVocab(checkpoint.get("idx_to_answer") or AnswerVocab.load(data_cfg["answer_vocab_path"]).idx_to_answer)
     tokenizer = load_tokenizer(model_cfg["text_model_name"])
     collator = VQACollator(tokenizer, data_cfg["max_question_length"])
@@ -39,17 +40,22 @@ def main() -> None:
         max_samples=data_cfg["max_val_samples"],
         train=False,
     )
+    num_workers = int(data_cfg.get("num_workers", 0))
+    pin_memory = bool(train_cfg.get("pin_memory", device.type == "cuda")) and device.type == "cuda"
+    persistent_workers = bool(train_cfg.get("persistent_workers", False)) and num_workers > 0
     val_loader = DataLoader(
         val_dataset,
-        batch_size=config["train"]["batch_size"],
+        batch_size=train_cfg["batch_size"],
         shuffle=False,
-        num_workers=data_cfg["num_workers"],
+        num_workers=num_workers,
         collate_fn=collator,
+        pin_memory=pin_memory,
+        persistent_workers=persistent_workers,
     )
 
     model = VQAModel(answer_vocab_size=len(answer_vocab), **model_cfg).to(device)
     model.load_state_dict(checkpoint["model_state"])
-    metrics = evaluate(model, val_loader, device)
+    metrics = evaluate(model, val_loader, device, use_amp=train_cfg.get("use_amp", False))
     print(f"val_loss={metrics['loss']:.4f} val_acc={metrics['accuracy']:.4f}")
 
 
