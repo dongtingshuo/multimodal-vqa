@@ -60,7 +60,7 @@ def load_config(path: str | Path) -> dict[str, Any]:
     return deep_update(DEFAULT_CONFIG, loaded)
 
 
-def resolve_device(device: str):
+def resolve_device(device: str, allow_fallback: bool = False):
     import torch
 
     if device == "auto":
@@ -69,4 +69,9 @@ def resolve_device(device: str):
         if getattr(torch.backends, "mps", None) and torch.backends.mps.is_available():
             return torch.device("mps")
         return torch.device("cpu")
+    if device == "cuda" and not torch.cuda.is_available():
+        if allow_fallback:
+            print("CUDA is configured but not available; using CPU instead.")
+            return torch.device("cpu")
+        raise RuntimeError("CUDA is configured but torch.cuda.is_available() is False.")
     return torch.device(device)

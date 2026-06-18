@@ -23,7 +23,7 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     args = parse_args()
     config = load_config(args.config)
-    device = resolve_device(config["device"])
+    device = resolve_device(config["device"], allow_fallback=True)
     checkpoint = load_checkpoint(args.checkpoint, device)
     data_cfg = config["data"]
     model_cfg = config["model"]

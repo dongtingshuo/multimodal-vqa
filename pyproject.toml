@@ -1,3 +1,19 @@
+[project]
+name = "multimodal-vqa"
+version = "0.1.0"
+description = "A multimodal Visual Question Answering pipeline with training, evaluation, inference, and Gradio demo support."
+readme = "README.md"
+requires-python = ">=3.9"
+authors = [{ name = "VQA Project Maintainers" }]
+keywords = ["visual-question-answering", "multimodal-learning", "pytorch", "gradio"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+
 [tool.pytest.ini_options]
 pythonpath = ["."]
 testpaths = ["tests"]
