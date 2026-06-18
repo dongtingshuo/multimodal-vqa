@@ -9,7 +9,7 @@ from vqa_project.config import load_config, resolve_device
 from vqa_project.data import VQACollator, VQADataset
 from vqa_project.engine import evaluate, load_checkpoint
 from vqa_project.hf import load_tokenizer
-from vqa_project.model import VQAModel
+from vqa_project.model import build_model
 
 
 def parse_args() -> argparse.Namespace:
@@ -53,7 +53,7 @@ def main() -> None:
         persistent_workers=persistent_workers,
     )
 
-    model = VQAModel(answer_vocab_size=len(answer_vocab), **model_cfg).to(device)
+    model = build_model(model_cfg, answer_vocab_size=len(answer_vocab)).to(device)
     model.load_state_dict(checkpoint["model_state"])
     metrics = evaluate(model, val_loader, device, use_amp=train_cfg.get("use_amp", False))
     print(f"val_loss={metrics['loss']:.4f} val_acc={metrics['accuracy']:.4f}")

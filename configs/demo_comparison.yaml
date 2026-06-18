@@ -1,0 +1,25 @@
+seed: 42
+device: cpu
+output_dir: outputs/comparison
+
+data:
+  answer_vocab_size: 8
+  image_size: 32
+  max_question_length: 12
+  num_samples: 8
+
+model:
+  text_model_name: distilbert-base-uncased
+  hidden_dim: 32
+  num_attention_heads: 4
+  dropout: 0.0
+  freeze_backbones: true
+  pretrained_cnn: false
+  mock_backbones: true
+  mock_hidden_size: 32
+
+variants:
+  - text_only
+  - image_only
+  - baseline_concat
+  - cross_attention

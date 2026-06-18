@@ -1,15 +1,19 @@
 # Multimodal Visual Question Answering (VQA)
 
-基于多模态融合的视觉问答系统。工程提供完整的数据准备、模型训练、评估、命令行推理和 Gradio Web 演示流程，默认面向 VQA v2.0 与 COCO 2014 图像数据。
+基于多模态融合的视觉问答系统。工程提供数据准备、模型训练、评估、命令行推理、Gradio Web 演示、模型变体对比和错误分析流程，默认面向 VQA v2.0 与 COCO 2014 图像数据。
 
-A production-style multimodal Visual Question Answering system with data preparation, model training, evaluation, command-line inference, and a Gradio web demo. The default workflow targets VQA v2.0 with COCO 2014 images.
+A research-oriented multimodal Visual Question Answering system with data preparation, model training, evaluation, command-line inference, a Gradio web demo, model-variant comparison, and error analysis. The default workflow targets VQA v2.0 with COCO 2014 images.
 
-## Highlights / 项目特性
+## Core Capabilities / 核心能力
 
 - **Multimodal architecture / 多模态架构**: ResNet-50 image encoder, DistilBERT text encoder, bidirectional cross attention, and answer classification head.
+- **Model variants / 模型变体**: `text_only`, `image_only`, `baseline_concat`, and `cross_attention` are available through a shared model factory.
+- **Comparison workflow / 对比流程**: lightweight report generation for validating model-variant comparison without external downloads.
+- **Question-type error analysis / 问题类型错误分析**: keyword-based diagnostics for color, count, object, location, yes/no, and other questions.
 - **Full VQA workflow / 完整 VQA 流程**: data preparation, vocabulary construction, training, validation, checkpointing, inference, and web demo.
 - **GPU-first training / GPU 优先训练**: CUDA, AMP mixed precision, DataLoader workers, pinned memory, and persistent workers are enabled in the default config.
 - **Reproducible configuration / 可复现实验配置**: all runtime settings are centralized in YAML config files.
+- **Toy demo / 玩具演示**: tiny example files support offline workflow checks for reports and diagnostics.
 - **Operational demo / 可运行演示**: Gradio interface supports image upload, question input, and Top-k answer display.
 - **Robust local runtime / 稳定本地运行**: demo handles missing checkpoints, occupied ports, CUDA fallback, and Hugging Face cache behavior with clear messages.
 
@@ -19,12 +23,22 @@ A production-style multimodal Visual Question Answering system with data prepara
 .
 ├── configs/
 │   ├── default.yaml          # Full GPU training config / 全量 GPU 训练配置
+│   ├── cross_attention.yaml  # Cross-modal attention variant / 跨模态注意力变体
+│   ├── baseline_concat.yaml  # Feature-concatenation baseline / 特征拼接基线
+│   ├── text_only.yaml        # Text-only baseline / 纯文本基线
+│   ├── image_only.yaml       # Image-only baseline / 纯图像基线
+│   ├── demo_comparison.yaml  # Offline comparison demo / 离线对比演示
 │   └── demo_cpu.yaml         # Lightweight smoke-test config / 轻量级 CPU 测试配置
+├── examples/
+│   └── toy_vqa_demo/         # Tiny public workflow sample / 极小公开流程样例
 ├── scripts/
-│   └── prepare_vqa_data.py   # VQA v2.0 and COCO data preparation / 数据准备脚本
+│   ├── prepare_vqa_data.py   # VQA v2.0 and COCO data preparation / 数据准备脚本
+│   ├── run_model_comparison.py
+│   └── run_error_analysis.py
 ├── tests/
 │   └── test_project_structure.py
 ├── vqa_project/
+│   ├── analysis/             # Error-analysis utilities / 错误分析工具
 │   ├── answers.py            # Answer normalization and vocabulary / 答案规范化与词表
 │   ├── config.py             # YAML config loading and device resolution / 配置加载与设备解析
 │   ├── data.py               # Dataset and collator / 数据集与批处理
@@ -142,6 +156,24 @@ The current evaluation reports validation loss and a simplified Top-1 answer acc
 
 当前评估输出验证集 loss 和简化 Top-1 答案准确率。
 
+## Quick Demo / 快速演示
+
+Run an offline model-variant comparison / 运行离线模型变体对比：
+
+```bash
+python scripts/run_model_comparison.py --config configs/demo_comparison.yaml
+```
+
+Run toy error analysis / 运行玩具错误分析：
+
+```bash
+python scripts/run_error_analysis.py --predictions examples/toy_vqa_demo/toy_predictions.jsonl
+```
+
+The generated reports are written under `outputs/`. These toy outputs validate the workflow and are not real benchmark results.
+
+生成的报告会写入 `outputs/`。这些玩具输出用于验证流程，不是正式 benchmark 结果。
+
 ## Command-Line Inference / 命令行推理
 
 ```bash
@@ -207,7 +239,9 @@ outputs/
 
 - [Usage Guide / 使用指南](docs/USAGE.md)
 - [Architecture / 架构说明](docs/ARCHITECTURE.md)
+- [Experiment Report / 实验报告](docs/EXPERIMENT_REPORT.md)
 - [Troubleshooting / 故障排查](docs/TROUBLESHOOTING.md)
+- [Toy Demo / 玩具演示](examples/toy_vqa_demo/README.md)
 - [Model Card / 模型说明](MODEL_CARD.md)
 - [Changelog / 变更记录](CHANGELOG.md)
 
@@ -233,6 +267,6 @@ This project is released under the MIT License. See [LICENSE](LICENSE).
 
 ## Notes / 说明
 
-This repository implements a compact VQA classification pipeline for practical training and deployment. It is not a reproduction of large-scale vision-language models such as BLIP, Flamingo, or LLaVA.
+This repository implements a compact VQA classification pipeline for practical training, controlled evaluation, and local demonstration. Toy reports are not benchmarks, the current Top-1 metric is simplified rather than official VQA soft accuracy, and full training requires large datasets plus suitable GPU resources. It is not a reproduction of large-scale vision-language models such as BLIP, Flamingo, or LLaVA.
 
-本工程实现的是一个可训练、可评估、可部署的紧凑型 VQA 分类管线，并非 BLIP、Flamingo、LLaVA 等大规模视觉语言模型的复现。
+本工程实现的是一个面向实际训练、受控评估和本地演示的紧凑型 VQA 分类管线。玩具报告不是 benchmark，当前 Top-1 指标是简化指标而非 VQA 官方 soft accuracy，全量训练需要大规模数据集和合适的 GPU 资源。本工程并非 BLIP、Flamingo、LLaVA 等大规模视觉语言模型的复现。

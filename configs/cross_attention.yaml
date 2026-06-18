@@ -32,7 +32,7 @@ train:
   pin_memory: true
   persistent_workers: true
   checkpoint_dir: checkpoints
-  checkpoint_name: best.pt
+  checkpoint_name: cross_attention_best.pt
   log_every: 50
 
 infer:

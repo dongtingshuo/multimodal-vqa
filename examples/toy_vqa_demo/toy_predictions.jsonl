@@ -1,0 +1,4 @@
+{"question":"What color is the car?","image_id":"toy_0001","ground_truth":"red","prediction":"red","confidence":0.82}
+{"question":"How many people are in the scene?","image_id":"toy_0002","ground_truth":"2","prediction":"3","confidence":0.51}
+{"question":"Is there a dog?","image_id":"toy_0003","ground_truth":"yes","prediction":"yes","confidence":0.77}
+{"question":"Where is the cup?","image_id":"toy_0004","ground_truth":"table","prediction":"kitchen","confidence":0.44}

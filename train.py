@@ -11,7 +11,7 @@ from vqa_project.config import load_config, resolve_device
 from vqa_project.data import VQACollator, VQADataset, default_annotation_path
 from vqa_project.engine import evaluate, save_checkpoint, set_seed, train_one_epoch
 from vqa_project.hf import load_tokenizer
-from vqa_project.model import VQAModel
+from vqa_project.model import build_model
 
 
 def parse_args() -> argparse.Namespace:
@@ -108,7 +108,7 @@ def main() -> None:
         collator=collator,
     )
 
-    model = VQAModel(answer_vocab_size=len(answer_vocab), **model_cfg).to(device)
+    model = build_model(model_cfg, answer_vocab_size=len(answer_vocab)).to(device)
     optimizer = torch.optim.AdamW(
         (parameter for parameter in model.parameters() if parameter.requires_grad),
         lr=train_cfg["lr"],

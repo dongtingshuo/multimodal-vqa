@@ -18,7 +18,7 @@ from vqa_project.config import load_config, resolve_device
 from vqa_project.engine import load_checkpoint
 from vqa_project.hf import load_tokenizer
 from vqa_project.inference import predict
-from vqa_project.model import VQAModel
+from vqa_project.model import build_model
 
 
 def parse_args() -> argparse.Namespace:
@@ -67,7 +67,7 @@ def build_predictor(config_path: str, checkpoint_path: str):
             checkpoint.get("idx_to_answer") or AnswerVocab.load(data_cfg["answer_vocab_path"]).idx_to_answer
         )
         tokenizer = load_tokenizer(model_cfg["text_model_name"])
-        model = VQAModel(answer_vocab_size=len(answer_vocab), **model_cfg).to(device)
+        model = build_model(model_cfg, answer_vocab_size=len(answer_vocab)).to(device)
         model.load_state_dict(checkpoint["model_state"])
     except Exception as exc:
         message = f"模型加载失败：{exc}"

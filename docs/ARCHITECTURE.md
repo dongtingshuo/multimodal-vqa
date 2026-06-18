@@ -19,7 +19,7 @@ ResNet-50 image encoder + DistilBERT text encoder
 Linear projections to shared hidden dimension
       |
       v
-Bidirectional cross attention
+Variant-specific fusion
       |
       v
 Answer classifier over Top-K answer vocabulary
@@ -41,6 +41,17 @@ Top-k answer probabilities
 The question is tokenized with a Hugging Face tokenizer and encoded by DistilBERT.
 
 问题文本通过 Hugging Face tokenizer 分词，并由 DistilBERT 编码。
+
+### Model Variants / 模型变体
+
+`vqa_project/model.py` exposes a shared `build_model(config)` factory. If `model.name` is omitted, the default variant is `cross_attention`.
+
+`vqa_project/model.py` 提供统一的 `build_model(config)` 工厂。如果省略 `model.name`，默认变体为 `cross_attention`。
+
+- `text_only`: text encoder plus classifier / 文本编码器加分类器
+- `image_only`: image encoder plus classifier / 图像编码器加分类器
+- `baseline_concat`: pooled image and text features concatenated before classification / 池化图像与文本特征拼接后分类
+- `cross_attention`: bidirectional cross-modal attention before classification / 分类前进行双向跨模态注意力融合
 
 ### Cross Attention Fusion / 交叉注意力融合
 

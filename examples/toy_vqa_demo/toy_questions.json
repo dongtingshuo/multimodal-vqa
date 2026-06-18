@@ -1,0 +1,22 @@
+[
+  {
+    "image_id": "toy_0001",
+    "question": "What color is the car?",
+    "answers": ["red"]
+  },
+  {
+    "image_id": "toy_0002",
+    "question": "How many people are in the scene?",
+    "answers": ["2"]
+  },
+  {
+    "image_id": "toy_0003",
+    "question": "Is there a dog?",
+    "answers": ["yes"]
+  },
+  {
+    "image_id": "toy_0004",
+    "question": "Where is the cup?",
+    "answers": ["table"]
+  }
+]

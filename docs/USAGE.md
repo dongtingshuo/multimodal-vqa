@@ -96,3 +96,27 @@ python demo.py --offline
 Use `--offline` only when Hugging Face model files are already cached locally.
 
 仅当 Hugging Face 模型文件已存在于本地缓存时，才使用 `--offline`。
+
+## Model Comparison / 模型对比
+
+Run a lightweight offline comparison across `text_only`, `image_only`, `baseline_concat`, and `cross_attention`:
+
+运行覆盖 `text_only`、`image_only`、`baseline_concat` 和 `cross_attention` 的轻量离线对比：
+
+```bash
+python scripts/run_model_comparison.py --config configs/demo_comparison.yaml
+```
+
+Reports are written to `outputs/comparison/`. The demo uses synthetic tensors and mock backbones, so the values validate the workflow rather than final model quality.
+
+报告会写入 `outputs/comparison/`。该演示使用合成张量和 mock backbone，因此数值用于验证流程，而不是表示最终模型质量。
+
+## Error Analysis / 错误分析
+
+```bash
+python scripts/run_error_analysis.py --predictions examples/toy_vqa_demo/toy_predictions.jsonl
+```
+
+Reports are written to `outputs/analysis/`.
+
+报告会写入 `outputs/analysis/`。
