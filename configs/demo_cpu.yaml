@@ -30,6 +30,8 @@ train:
   checkpoint_dir: checkpoints
   checkpoint_name: best.pt
   log_every: 4
+  selection_metric: vqa_score
+  use_scheduler: false
 
 infer:
   topk: 5

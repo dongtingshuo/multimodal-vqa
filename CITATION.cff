@@ -1,0 +1,12 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it using the metadata below. / 如果使用本软件，请按以下元数据引用。"
+title: "Multimodal Visual Question Answering (VQA)"
+type: software
+authors:
+  - family-names: "Shuo"
+    given-names: "Dongting"
+repository-code: "https://github.com/dongtingshuo/multimodal-vqa"
+url: "https://github.com/dongtingshuo/multimodal-vqa"
+license: MIT
+version: 0.1.0
+date-released: 2026-06-18

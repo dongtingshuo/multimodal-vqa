@@ -1,10 +1,10 @@
 from __future__ import annotations
 
+from copy import deepcopy
 from pathlib import Path
 from typing import Any
 
 import yaml
-
 
 DEFAULT_CONFIG: dict[str, Any] = {
     "seed": 42,
@@ -22,6 +22,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "num_workers": 0,
     },
     "model": {
+        "name": "cross_attention",
         "text_model_name": "distilbert-base-uncased",
         "hidden_dim": 512,
         "num_attention_heads": 8,
@@ -38,6 +39,11 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "checkpoint_dir": "checkpoints",
         "checkpoint_name": "best.pt",
         "log_every": 20,
+        "selection_metric": "vqa_score",
+        "use_scheduler": True,
+        "scheduler_factor": 0.5,
+        "scheduler_patience": 1,
+        "min_lr": 1e-6,
     },
     "infer": {"topk": 5},
 }
@@ -58,6 +64,25 @@ def load_config(path: str | Path) -> dict[str, Any]:
     with config_path.open("r", encoding="utf-8") as f:
         loaded = yaml.safe_load(f) or {}
     return deep_update(DEFAULT_CONFIG, loaded)
+
+
+def resolve_checkpoint_config(runtime_config: dict[str, Any], checkpoint: dict[str, Any]) -> dict[str, Any]:
+    """Use checkpoint-owned architecture and preprocessing with local runtime paths."""
+    stored_config = checkpoint.get("config")
+    if not isinstance(stored_config, dict):
+        return deepcopy(runtime_config)
+
+    resolved = deepcopy(runtime_config)
+    stored_model = stored_config.get("model")
+    if isinstance(stored_model, dict):
+        resolved["model"] = deep_update(DEFAULT_CONFIG["model"], stored_model)
+
+    stored_data = stored_config.get("data")
+    if isinstance(stored_data, dict):
+        for key in ("answer_vocab_size", "image_size", "max_question_length"):
+            if key in stored_data:
+                resolved["data"][key] = stored_data[key]
+    return resolved
 
 
 def resolve_device(device: str, allow_fallback: bool = False):

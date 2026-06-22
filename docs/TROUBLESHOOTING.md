@@ -45,6 +45,10 @@ data/vqa/downloads/train2014.zip
 data/vqa/downloads/val2014.zip
 ```
 
+Interrupted automatic downloads remain as `.part` files and resume on the next run. Completed archives are checked by expected size and checksum before extraction; ZIP CRC is checked during extraction.
+
+自动下载中断后会保留 `.part` 文件，下次运行时继续下载。完整压缩包在解压前会检查预期大小和校验和，解压时还会检查 ZIP CRC。
+
 ## Training Progress Stays at 0% / 训练进度长期停在 0%
 
 Possible causes:
@@ -81,7 +85,7 @@ Possible causes:
 - `checkpoints/best.pt` does not exist.
 - Hugging Face model files are not cached and the environment is offline.
 - The demo was launched with `--offline` before tokenizer/model files were cached.
-- The checkpoint architecture does not match the current config.
+- A legacy checkpoint does not contain architecture metadata, or the file is incomplete.
 
 Fix:
 
@@ -89,8 +93,13 @@ Fix:
 
 ```bash
 pip install -r requirements.txt
+python scripts/download_checkpoint.py
 python demo.py --config configs/default.yaml --checkpoint checkpoints/best.pt
 ```
+
+Current checkpoints are self-describing: model architecture and preprocessing settings come from checkpoint metadata, while local paths and device settings come from the runtime config.
+
+当前 checkpoint 为自描述格式：模型架构和预处理参数来自权重元数据，本地路径和设备设置来自运行时配置。
 
 Do not use `--offline` unless the required Hugging Face files are already cached.
 

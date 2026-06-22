@@ -1,4 +1,4 @@
-"""Utilities for the multimodal VQA course project."""
+"""Core utilities for the multimodal VQA system."""
 
 __all__ = [
     "answers",

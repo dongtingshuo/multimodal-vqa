@@ -16,6 +16,14 @@
 - 增加用于离线流程验证的玩具演示文件。
 - Dependency pinning guidance for stable Gradio execution.
 - 增加稳定运行 Gradio 的依赖版本说明。
+- VQA soft-score and Top-5 VQA metrics with per-example BCE loss normalization.
+- 增加 VQA soft score、Top-5 VQA 指标和按样本归一化的 BCE loss。
+- Persistent training history, curves, learning-rate records, timing, and runtime metadata.
+- 增加训练历史、曲线、学习率、耗时和运行元数据持久化。
+- Resumable, integrity-checked dataset and Release checkpoint downloads.
+- 增加可断点续传并校验完整性的数据集和 Release 权重下载流程。
+- GitHub Actions CI for linting, tests, compilation, dependency checks, and package builds.
+- 增加覆盖代码检查、测试、编译、依赖检查和打包的 GitHub Actions CI。
 - Git ignore rules for datasets, checkpoints, caches, and generated outputs.
 - 增加数据集、checkpoint、缓存和生成产物的 Git 忽略规则。
 
@@ -29,6 +37,10 @@
 - 说明推理、评估和演示入口的 CUDA 回退行为。
 - Updated runtime entrypoints to construct models through the shared model factory.
 - 将运行入口调整为通过统一模型工厂构建模型。
+- Checkpoint loading now restores stored architecture and preprocessing configuration while preserving local runtime paths.
+- checkpoint 加载会恢复内置架构与预处理配置，同时保留本地运行路径。
+- Runtime and development dependencies are separated and declared in `pyproject.toml`.
+- 运行与开发依赖已分离，并在 `pyproject.toml` 中完整声明。
 
 ## 0.1.0 / 初始版本
 

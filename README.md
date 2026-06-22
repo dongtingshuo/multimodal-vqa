@@ -1,5 +1,9 @@
 # Multimodal Visual Question Answering (VQA)
 
+[![CI](https://github.com/dongtingshuo/multimodal-vqa/actions/workflows/ci.yml/badge.svg)](https://github.com/dongtingshuo/multimodal-vqa/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Python 3.9+](https://img.shields.io/badge/Python-3.9%2B-3776AB.svg)](pyproject.toml)
+
 基于多模态融合的视觉问答系统。工程提供数据准备、模型训练、评估、命令行推理、Gradio Web 演示、模型变体对比和错误分析流程，默认面向 VQA v2.0 与 COCO 2014 图像数据。
 
 A research-oriented multimodal Visual Question Answering system with data preparation, model training, evaluation, command-line inference, a Gradio web demo, model-variant comparison, and error analysis. The default workflow targets VQA v2.0 with COCO 2014 images.
@@ -13,6 +17,9 @@ A research-oriented multimodal Visual Question Answering system with data prepar
 - **Full VQA workflow / 完整 VQA 流程**: data preparation, vocabulary construction, training, validation, checkpointing, inference, and web demo.
 - **GPU-first training / GPU 优先训练**: CUDA, AMP mixed precision, DataLoader workers, pinned memory, and persistent workers are enabled in the default config.
 - **Reproducible configuration / 可复现实验配置**: all runtime settings are centralized in YAML config files.
+- **VQA-aware evaluation / VQA 评估**: soft-answer VQA score, Top-5 VQA score, hard Top-1 accuracy, and per-example multilabel loss.
+- **Experiment tracking / 实验记录**: epoch history, curves, learning rate, elapsed time, environment versions, and Git commit metadata.
+- **Self-describing checkpoints / 自描述权重**: architecture and preprocessing settings are loaded from checkpoint metadata while local paths remain configurable.
 - **Toy demo / 玩具演示**: tiny example files support offline workflow checks for reports and diagnostics.
 - **Operational demo / 可运行演示**: Gradio interface supports image upload, question input, and Top-k answer display.
 - **Robust local runtime / 稳定本地运行**: demo handles missing checkpoints, occupied ports, CUDA fallback, and Hugging Face cache behavior with clear messages.
@@ -33,10 +40,11 @@ A research-oriented multimodal Visual Question Answering system with data prepar
 │   └── toy_vqa_demo/         # Tiny public workflow sample / 极小公开流程样例
 ├── scripts/
 │   ├── prepare_vqa_data.py   # VQA v2.0 and COCO data preparation / 数据准备脚本
+│   ├── download_checkpoint.py # Verified Release download / 校验 Release 权重下载
 │   ├── run_model_comparison.py
 │   └── run_error_analysis.py
 ├── tests/
-│   └── test_project_structure.py
+│   └── test_*.py             # Offline unit and workflow tests / 离线单元与流程测试
 ├── vqa_project/
 │   ├── analysis/             # Error-analysis utilities / 错误分析工具
 │   ├── answers.py            # Answer normalization and vocabulary / 答案规范化与词表
@@ -45,12 +53,14 @@ A research-oriented multimodal Visual Question Answering system with data prepar
 │   ├── engine.py             # Training, evaluation, checkpoints / 训练、评估与权重保存
 │   ├── hf.py                 # Hugging Face model helpers / Hugging Face 加载辅助
 │   ├── inference.py          # Single-image inference / 单图推理
+│   ├── tracking.py           # History, curves, runtime metadata / 历史、曲线与运行元数据
 │   └── model.py              # Multimodal VQA model / 多模态模型
 ├── train.py                  # Training entrypoint / 训练入口
 ├── evaluate.py               # Evaluation entrypoint / 评估入口
 ├── infer.py                  # CLI inference entrypoint / 命令行推理入口
 ├── demo.py                   # Gradio web demo / Web 演示入口
 ├── requirements.txt
+├── requirements-dev.txt
 └── pyproject.toml
 ```
 
@@ -65,6 +75,12 @@ python -m venv .venv
 .venv\Scripts\activate  # Windows
 # source .venv/bin/activate  # macOS/Linux
 pip install -r requirements.txt
+```
+
+Development dependencies / 开发依赖：
+
+```bash
+pip install -r requirements-dev.txt
 ```
 
 Check CUDA availability / 检查 CUDA：
@@ -113,6 +129,23 @@ COCO image archives are large. Keep dataset files outside Git.
 
 COCO 图片压缩包体积较大，数据文件不应提交到 Git。
 
+The downloader resumes `.part` files and verifies known archive sizes, checksums, ZIP CRC values, and extraction paths.
+
+下载器支持从 `.part` 文件断点续传，并校验已知压缩包大小、校验和、ZIP CRC 与解压路径。
+
+## Trained Checkpoint / 已训练模型
+
+Download and verify the published `v0.1.0` checkpoint / 下载并校验已发布的 `v0.1.0` 权重：
+
+```bash
+python scripts/download_checkpoint.py
+```
+
+- [GitHub Release](https://github.com/dongtingshuo/multimodal-vqa/releases/tag/v0.1.0)
+- [Direct checkpoint download / 权重直链](https://github.com/dongtingshuo/multimodal-vqa/releases/download/v0.1.0/best.pt)
+- SHA256: `d9638309c2e74a30479332eaabb0f27869555d967eefae0a1eaf981342c3f98c`
+- Size / 大小: `427,216,108` bytes
+
 ## Training / 模型训练
 
 Default full-training command / 默认全量训练命令：
@@ -140,6 +173,18 @@ Checkpoint output / 权重输出：
 checkpoints/best.pt
 ```
 
+Training artifacts / 训练产物：
+
+```text
+checkpoints/training_history.csv
+checkpoints/training_curves.png
+checkpoints/run_metadata.json
+```
+
+The best checkpoint is selected by validation `vqa_score` by default. A ReduceLROnPlateau scheduler tracks the same metric.
+
+默认按验证集 `vqa_score` 选择最佳权重，ReduceLROnPlateau 学习率调度器也追踪该指标。
+
 For a fast smoke test / 快速连通性测试：
 
 ```bash
@@ -152,9 +197,9 @@ python train.py --config configs/demo_cpu.yaml
 python evaluate.py --config configs/default.yaml --checkpoint checkpoints/best.pt
 ```
 
-The current evaluation reports validation loss and a simplified Top-1 answer accuracy.
+Evaluation reports per-example multilabel loss, hard Top-1 accuracy, VQA soft score, and Top-5 VQA score.
 
-当前评估输出验证集 loss 和简化 Top-1 答案准确率。
+评估输出按样本归一化的多标签 loss、硬标签 Top-1 准确率、VQA soft score 和 Top-5 VQA score。
 
 ## Quick Demo / 快速演示
 
@@ -244,6 +289,9 @@ outputs/
 - [Toy Demo / 玩具演示](examples/toy_vqa_demo/README.md)
 - [Model Card / 模型说明](MODEL_CARD.md)
 - [Changelog / 变更记录](CHANGELOG.md)
+- [Contributing / 贡献指南](CONTRIBUTING.md)
+- [Security Policy / 安全政策](SECURITY.md)
+- [Citation / 引用元数据](CITATION.cff)
 
 ## Development / 开发
 
@@ -251,6 +299,13 @@ Run tests / 运行测试：
 
 ```bash
 python -m pytest -q
+```
+
+Run lint and package checks / 运行代码与打包检查：
+
+```bash
+python -m ruff check .
+python -m build
 ```
 
 Run syntax checks / 语法检查：
@@ -267,6 +322,6 @@ This project is released under the MIT License. See [LICENSE](LICENSE).
 
 ## Notes / 说明
 
-This repository implements a compact VQA classification pipeline for practical training, controlled evaluation, and local demonstration. Toy reports are not benchmarks, the current Top-1 metric is simplified rather than official VQA soft accuracy, and full training requires large datasets plus suitable GPU resources. It is not a reproduction of large-scale vision-language models such as BLIP, Flamingo, or LLaVA.
+This repository implements a compact VQA classification pipeline for practical training, controlled evaluation, and local demonstration. Toy reports are not benchmarks. The runtime VQA score follows soft target credit from VQA annotations, while exact parity with the official evaluation toolkit still depends on answer normalization and submission protocol. Full training requires large datasets and suitable GPU resources. It is not a reproduction of large-scale vision-language models such as BLIP, Flamingo, or LLaVA.
 
-本工程实现的是一个面向实际训练、受控评估和本地演示的紧凑型 VQA 分类管线。玩具报告不是 benchmark，当前 Top-1 指标是简化指标而非 VQA 官方 soft accuracy，全量训练需要大规模数据集和合适的 GPU 资源。本工程并非 BLIP、Flamingo、LLaVA 等大规模视觉语言模型的复现。
+本工程实现的是一个面向实际训练、受控评估和本地演示的紧凑型 VQA 分类管线。玩具报告不是 benchmark。运行时 VQA score 使用 VQA 标注中的软标签得分，但与官方评估工具完全一致仍取决于答案归一化和提交协议。全量训练需要大规模数据集和合适的 GPU 资源。本工程并非 BLIP、Flamingo、LLaVA 等大规模视觉语言模型的复现。

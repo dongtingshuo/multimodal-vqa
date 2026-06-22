@@ -5,7 +5,6 @@ from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Any
 
-
 QUESTION_TYPE_KEYWORDS = {
     "color": ("color", "colour", "red", "blue", "green", "yellow", "black", "white", "颜色"),
     "count": ("how many", "number of", "count", "many", "多少", "几个", "几只", "几辆"),

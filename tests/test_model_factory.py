@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import pytest
-import torch
 
 from vqa_project.model import MODEL_REGISTRY, VQAModel, build_model
 

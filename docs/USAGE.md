@@ -10,6 +10,12 @@ This document describes the standard operation flow for the VQA project.
 pip install -r requirements.txt
 ```
 
+For development / 开发环境：
+
+```bash
+pip install -r requirements-dev.txt
+```
+
 For Windows GPU environments, install a CUDA-enabled PyTorch package before running training.
 
 Windows GPU 环境请先安装 CUDA 版 PyTorch，再安装其余依赖。
@@ -24,7 +30,25 @@ The command prepares VQA v2.0 annotations, question files, COCO 2014 images, and
 
 该命令会准备 VQA v2.0 标注、问题文件、COCO 2014 图片，以及 `data/answer_vocab.json`。
 
-## 3. Train / 训练
+Known archives are downloaded with resume support and validated by size, checksum, ZIP CRC, and safe extraction path.
+
+已知压缩包支持断点续传，并检查文件大小、校验和、ZIP CRC 与安全解压路径。
+
+## 3. Download the Released Checkpoint / 下载已发布权重
+
+Training is optional for inference and the web demo:
+
+如果只进行推理或 Web 演示，可以直接下载已训练权重：
+
+```bash
+python scripts/download_checkpoint.py
+```
+
+The script verifies the published SHA256 digest before placing the file at `checkpoints/best.pt`.
+
+脚本会校验发布页公布的 SHA256，然后将文件放置到 `checkpoints/best.pt`。
+
+## 4. Train / 训练
 
 ```bash
 python train.py --config configs/default.yaml
@@ -38,13 +62,21 @@ The best checkpoint is saved to:
 checkpoints/best.pt
 ```
 
-## 4. Evaluate / 评估
+The same directory also receives `training_history.csv`, `training_curves.png`, and `run_metadata.json`. Best-checkpoint selection uses validation `vqa_score` by default.
+
+同一目录还会生成 `training_history.csv`、`training_curves.png` 和 `run_metadata.json`。默认按验证集 `vqa_score` 选择最佳权重。
+
+## 5. Evaluate / 评估
 
 ```bash
 python evaluate.py --config configs/default.yaml --checkpoint checkpoints/best.pt
 ```
 
-## 5. Run Inference / 执行推理
+The output includes loss, hard Top-1 accuracy, VQA soft score, and Top-5 VQA score.
+
+输出包含 loss、硬标签 Top-1 准确率、VQA soft score 和 Top-5 VQA score。
+
+## 6. Run Inference / 执行推理
 
 ```bash
 python infer.py \
@@ -55,7 +87,7 @@ python infer.py \
   --topk 5
 ```
 
-## 6. Launch Web Demo / 启动 Web 演示
+## 7. Launch Web Demo / 启动 Web 演示
 
 ```bash
 python demo.py --config configs/default.yaml --checkpoint checkpoints/best.pt

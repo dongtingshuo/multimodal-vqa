@@ -1,12 +1,10 @@
 from __future__ import annotations
 
 import argparse
-from concurrent.futures import ThreadPoolExecutor, as_completed
 import json
 import sys
-import time
-import urllib.request
 import zipfile
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 from tqdm import tqdm
@@ -16,18 +14,42 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from vqa_project.answers import AnswerVocab, build_answer_vocab, normalize_answer
-
+from vqa_project.downloads import download_file
 
 VQA_ZIPS = {
-    "train_annotations": "https://s3.amazonaws.com/cvmlp/vqa/mscoco/vqa/v2_Annotations_Train_mscoco.zip",
-    "val_annotations": "https://s3.amazonaws.com/cvmlp/vqa/mscoco/vqa/v2_Annotations_Val_mscoco.zip",
-    "train_questions": "https://s3.amazonaws.com/cvmlp/vqa/mscoco/vqa/v2_Questions_Train_mscoco.zip",
-    "val_questions": "https://s3.amazonaws.com/cvmlp/vqa/mscoco/vqa/v2_Questions_Val_mscoco.zip",
+    "train_annotations": {
+        "url": "https://s3.amazonaws.com/cvmlp/vqa/mscoco/vqa/v2_Annotations_Train_mscoco.zip",
+        "checksum": "sha256:fb101bcefe91422c543c2bb6d70af11eb3119d0ff745ae283d09acdf66250853",
+        "size": 21708861,
+    },
+    "val_annotations": {
+        "url": "https://s3.amazonaws.com/cvmlp/vqa/mscoco/vqa/v2_Annotations_Val_mscoco.zip",
+        "checksum": "sha256:0caae7c8d1dafd852727f5ac046bc1efca9b72026bd6ffa34fc489f3a7b3291e",
+        "size": 10518930,
+    },
+    "train_questions": {
+        "url": "https://s3.amazonaws.com/cvmlp/vqa/mscoco/vqa/v2_Questions_Train_mscoco.zip",
+        "checksum": "sha256:05a64b6e2582d06d7585f5429674a9a33851878be1bff9f8668cdcf792df611e",
+        "size": 7239401,
+    },
+    "val_questions": {
+        "url": "https://s3.amazonaws.com/cvmlp/vqa/mscoco/vqa/v2_Questions_Val_mscoco.zip",
+        "checksum": "sha256:e71f6c5c3e97a51d050f28243e262b28cd0c48d11a6b4632d769d30d3f93222a",
+        "size": 3494929,
+    },
 }
 
 COCO_ZIPS = {
-    "train2014": "http://images.cocodataset.org/zips/train2014.zip",
-    "val2014": "http://images.cocodataset.org/zips/val2014.zip",
+    "train2014": {
+        "url": "http://images.cocodataset.org/zips/train2014.zip",
+        "checksum": "md5:0da8c0bd3d6becc4dcb32757491aca88",
+        "size": 13510573713,
+    },
+    "val2014": {
+        "url": "http://images.cocodataset.org/zips/val2014.zip",
+        "checksum": "md5:a3d79f5ed8d289b7a7554ce06a5782b3",
+        "size": 6645013297,
+    },
 }
 
 EXPECTED_COCO_IMAGE_COUNTS = {
@@ -38,43 +60,14 @@ EXPECTED_COCO_IMAGE_COUNTS = {
 COCO_IMAGE_URL = "http://images.cocodataset.org/{split}/{filename}"
 
 
-def download(url: str, output_path: Path, retries: int = 3) -> None:
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    if output_path.exists() and output_path.stat().st_size > 0:
-        print(f"exists: {output_path}")
-        return
-
-    temp_path = output_path.with_suffix(output_path.suffix + ".part")
-    for attempt in range(1, retries + 1):
-        try:
-            with urllib.request.urlopen(url, timeout=30) as response:
-                total = int(response.headers.get("Content-Length", "0"))
-                with temp_path.open("wb") as f, tqdm(
-                    total=total,
-                    unit="B",
-                    unit_scale=True,
-                    desc=output_path.name,
-                ) as bar:
-                    while True:
-                        chunk = response.read(1024 * 1024)
-                        if not chunk:
-                            break
-                        f.write(chunk)
-                        bar.update(len(chunk))
-            temp_path.replace(output_path)
-            return
-        except Exception as exc:
-            temp_path.unlink(missing_ok=True)
-            if attempt == retries:
-                raise RuntimeError(f"Failed to download {url}") from exc
-            wait_seconds = 2 * attempt
-            print(f"download failed ({attempt}/{retries}): {exc}; retrying in {wait_seconds}s")
-            time.sleep(wait_seconds)
-
-
 def extract_zip(zip_path: Path, output_dir: Path) -> None:
     with zipfile.ZipFile(zip_path) as archive:
         members = archive.namelist()
+        output_root = output_dir.resolve()
+        for member in members:
+            target = (output_dir / member).resolve()
+            if not target.is_relative_to(output_root):
+                raise zipfile.BadZipFile(f"Unsafe archive member: {member}")
         missing = [name for name in members if not (output_dir / name).exists()]
         if not missing:
             print(f"extracted: {zip_path.name}")
@@ -155,12 +148,12 @@ def download_subset_images_parallel(
 
     if workers <= 1:
         for url, output_path in tqdm(jobs, desc=f"{split} images"):
-            download(url, output_path, retries=3)
+            download_file(url, output_path, retries=3)
         return
 
     def fetch(job: tuple[str, Path]) -> Path:
         url, output_path = job
-        download(url, output_path, retries=3)
+        download_file(url, output_path, retries=3)
         return output_path
 
     with ThreadPoolExecutor(max_workers=workers) as executor:
@@ -170,9 +163,9 @@ def download_subset_images_parallel(
 
 
 def download_full_coco_images(root: Path, downloads: Path) -> None:
-    for split_name, url in COCO_ZIPS.items():
+    for split_name, artifact in COCO_ZIPS.items():
         image_dir = root / split_name
-        zip_path = downloads / Path(url).name
+        zip_path = downloads / Path(artifact["url"]).name
         existing_count = sum(1 for _ in image_dir.glob("*.jpg")) if image_dir.exists() else 0
         expected_count = EXPECTED_COCO_IMAGE_COUNTS[split_name]
         if existing_count >= expected_count:
@@ -180,7 +173,13 @@ def download_full_coco_images(root: Path, downloads: Path) -> None:
             continue
         if existing_count > 0:
             print(f"{split_name}: found only {existing_count}/{expected_count} images; downloading full zip")
-        download(url, zip_path, retries=3)
+        download_file(
+            artifact["url"],
+            zip_path,
+            expected_checksum=artifact["checksum"],
+            expected_size=artifact["size"],
+            retries=3,
+        )
         extract_zip(zip_path, root)
 
 
@@ -207,9 +206,14 @@ def main() -> None:
     downloads = root / "downloads"
     root.mkdir(parents=True, exist_ok=True)
 
-    for _name, url in VQA_ZIPS.items():
-        zip_path = downloads / Path(url).name
-        download(url, zip_path)
+    for artifact in VQA_ZIPS.values():
+        zip_path = downloads / Path(artifact["url"]).name
+        download_file(
+            artifact["url"],
+            zip_path,
+            expected_checksum=artifact["checksum"],
+            expected_size=artifact["size"],
+        )
         extract_zip(zip_path, root)
 
     vocab_path = Path(args.answer_vocab_path)

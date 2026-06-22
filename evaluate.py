@@ -5,7 +5,7 @@ import argparse
 from torch.utils.data import DataLoader
 
 from vqa_project.answers import AnswerVocab
-from vqa_project.config import load_config, resolve_device
+from vqa_project.config import load_config, resolve_checkpoint_config, resolve_device
 from vqa_project.data import VQACollator, VQADataset
 from vqa_project.engine import evaluate, load_checkpoint
 from vqa_project.hf import load_tokenizer
@@ -24,11 +24,14 @@ def main() -> None:
     config = load_config(args.config)
     device = resolve_device(config["device"], allow_fallback=True)
     checkpoint = load_checkpoint(args.checkpoint, device)
+    config = resolve_checkpoint_config(config, checkpoint)
 
     data_cfg = config["data"]
     model_cfg = config["model"]
     train_cfg = config["train"]
-    answer_vocab = AnswerVocab(checkpoint.get("idx_to_answer") or AnswerVocab.load(data_cfg["answer_vocab_path"]).idx_to_answer)
+    answer_vocab = AnswerVocab(
+        checkpoint.get("idx_to_answer") or AnswerVocab.load(data_cfg["answer_vocab_path"]).idx_to_answer
+    )
     tokenizer = load_tokenizer(model_cfg["text_model_name"])
     collator = VQACollator(tokenizer, data_cfg["max_question_length"])
 
@@ -56,7 +59,12 @@ def main() -> None:
     model = build_model(model_cfg, answer_vocab_size=len(answer_vocab)).to(device)
     model.load_state_dict(checkpoint["model_state"])
     metrics = evaluate(model, val_loader, device, use_amp=train_cfg.get("use_amp", False))
-    print(f"val_loss={metrics['loss']:.4f} val_acc={metrics['accuracy']:.4f}")
+    print(
+        f"val_loss={metrics['loss']:.4f} "
+        f"val_acc={metrics['accuracy']:.4f} "
+        f"val_vqa={metrics['vqa_score']:.4f} "
+        f"val_top5_vqa={metrics['top5_vqa_score']:.4f}"
+    )
 
 
 if __name__ == "__main__":

@@ -3,7 +3,7 @@ from __future__ import annotations
 import argparse
 
 from vqa_project.answers import AnswerVocab
-from vqa_project.config import load_config, resolve_device
+from vqa_project.config import load_config, resolve_checkpoint_config, resolve_device
 from vqa_project.engine import load_checkpoint
 from vqa_project.hf import load_tokenizer
 from vqa_project.inference import predict
@@ -25,10 +25,13 @@ def main() -> None:
     config = load_config(args.config)
     device = resolve_device(config["device"], allow_fallback=True)
     checkpoint = load_checkpoint(args.checkpoint, device)
+    config = resolve_checkpoint_config(config, checkpoint)
     data_cfg = config["data"]
     model_cfg = config["model"]
 
-    answer_vocab = AnswerVocab(checkpoint.get("idx_to_answer") or AnswerVocab.load(data_cfg["answer_vocab_path"]).idx_to_answer)
+    answer_vocab = AnswerVocab(
+        checkpoint.get("idx_to_answer") or AnswerVocab.load(data_cfg["answer_vocab_path"]).idx_to_answer
+    )
     tokenizer = load_tokenizer(model_cfg["text_model_name"])
     model = build_model(model_cfg, answer_vocab_size=len(answer_vocab)).to(device)
     model.load_state_dict(checkpoint["model_state"])

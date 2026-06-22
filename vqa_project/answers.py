@@ -6,7 +6,6 @@ from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
 
-
 _PUNCT_RE = re.compile(r"[^a-z0-9 ]+")
 _SPACE_RE = re.compile(r"\s+")
 

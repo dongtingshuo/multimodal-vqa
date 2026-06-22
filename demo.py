@@ -14,7 +14,7 @@ import gradio as gr
 from PIL import Image
 
 from vqa_project.answers import AnswerVocab
-from vqa_project.config import load_config, resolve_device
+from vqa_project.config import load_config, resolve_checkpoint_config, resolve_device
 from vqa_project.engine import load_checkpoint
 from vqa_project.hf import load_tokenizer
 from vqa_project.inference import predict
@@ -46,8 +46,6 @@ def find_available_port(preferred_port: int, server_name: str, attempts: int = 5
 
 def build_predictor(config_path: str, checkpoint_path: str):
     config = load_config(config_path)
-    data_cfg = config["data"]
-    model_cfg = config["model"]
     device = resolve_device(config["device"], allow_fallback=True)
     checkpoint_file = Path(checkpoint_path)
     if not checkpoint_file.exists():
@@ -63,6 +61,9 @@ def build_predictor(config_path: str, checkpoint_path: str):
 
     try:
         checkpoint = load_checkpoint(checkpoint_file, device)
+        config = resolve_checkpoint_config(config, checkpoint)
+        data_cfg = config["data"]
+        model_cfg = config["model"]
         answer_vocab = AnswerVocab(
             checkpoint.get("idx_to_answer") or AnswerVocab.load(data_cfg["answer_vocab_path"]).idx_to_answer
         )

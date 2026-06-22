@@ -24,21 +24,25 @@ The system is designed for reproducible local experimentation on VQA-format data
 
 ## Evaluation Metrics / 评估指标
 
-- `loss`: training or validation objective value.
-- `accuracy`: simplified Top-1 answer accuracy used by the current runtime.
+- `loss`: per-example multilabel BCE objective, summed across answer classes and normalized by batch size.
+- `accuracy`: hard Top-1 answer accuracy.
+- `vqa_score`: soft credit assigned to the highest-ranked answer from VQA annotation targets.
+- `top5_vqa_score`: highest soft credit available among the five highest-ranked answers.
 - `top-k prediction inspection`: optional review of the highest-probability answer candidates.
 - `mock_loss`: cross-entropy from the toy comparison workflow.
 - `mock_accuracy`: Top-1 accuracy from the toy comparison workflow.
 
-- `loss`：训练或验证目标函数值。
-- `accuracy`：当前运行流程使用的简化 Top-1 答案准确率。
+- `loss`：在答案类别上求和、按 batch size 归一化的每样本多标签 BCE 目标。
+- `accuracy`：硬标签 Top-1 答案准确率。
+- `vqa_score`：从 VQA 标注软标签中读取最高排名答案的得分。
+- `top5_vqa_score`：前五个候选答案中可获得的最高软标签得分。
 - `top-k prediction inspection`：可选查看概率最高的候选答案。
 - `mock_loss`：玩具对比流程中的交叉熵。
 - `mock_accuracy`：玩具对比流程中的 Top-1 准确率。
 
-The simplified Top-1 metric is useful for tracking local experiments, but it is not the official VQA soft accuracy metric.
+`vqa_score` follows the soft-credit targets used by VQA training. Exact parity with the official toolkit still requires matching its answer normalization and submission protocol.
 
-简化 Top-1 指标适合追踪本地实验，但它不是 VQA 官方 soft accuracy 指标。
+`vqa_score` 遵循 VQA 训练软标签的计分方式。如需与官方工具完全一致，还需保证答案归一化和提交协议一致。
 
 ## Comparison Workflow / 对比实验流程
 
@@ -93,7 +97,7 @@ Error analysis reports are diagnostic tools for finding recurring failure patter
 
 - The answer space is a fixed Top-K vocabulary.
 - Questions are expected to be English in the default tokenizer setup.
-- The current validation accuracy is simplified Top-1 accuracy, not official VQA scoring.
+- Official evaluation-toolkit parity is not yet asserted because answer normalization and submission formatting may differ.
 - Toy reports are workflow checks, not benchmark evidence.
 - Small sample results are unstable and should be treated as smoke-test outputs.
 - Pretrained model cache availability may affect local full-model runs.
@@ -101,7 +105,7 @@ Error analysis reports are diagnostic tools for finding recurring failure patter
 
 - 答案空间是固定 Top-K 词表。
 - 默认 tokenizer 设置下，问题建议使用英文。
-- 当前验证准确率是简化 Top-1 准确率，不是 VQA 官方评分。
+- 目前不声称与官方评估工具完全一致，因为答案归一化和提交格式可能存在差异。
 - 玩具报告是流程检查，不是 benchmark 证据。
 - 小样本结果不稳定，应作为连通性检查输出看待。
 - 预训练模型缓存可用性可能影响本地完整模型运行。
@@ -109,20 +113,20 @@ Error analysis reports are diagnostic tools for finding recurring failure patter
 
 ## Future Work / 后续工作
 
-- Add official VQA soft-accuracy evaluation.
+- Add an official VQA evaluation-toolkit export and parity test.
 - Add BLIP / ViLT adapters as optional models.
 - Add repeated-run experiment summaries with confidence intervals.
 - Add richer question taxonomy and manual review fields.
 - Add attention visualization.
 - Improve answer normalization.
-- Add optional experiment tracking for full training runs.
+- Add optional remote experiment tracking for full training runs.
 - Add additional vision and text backbone choices behind the same model factory.
 
-- 增加 VQA 官方 soft accuracy 评估。
+- 增加 VQA 官方评估工具导出和一致性测试。
 - 将 BLIP / ViLT adapter 作为可选模型接入。
 - 增加多次运行的实验汇总和置信区间。
 - 增加更细的问题类型体系和人工复核字段。
 - 增加注意力可视化。
 - 改进答案归一化。
-- 为全量训练增加可选实验追踪。
+- 为全量训练增加可选的远程实验追踪。
 - 在同一模型工厂下增加更多视觉和文本 backbone 选择。

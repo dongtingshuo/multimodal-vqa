@@ -8,7 +8,9 @@ This document describes the trained checkpoint used by this repository.
 
 - **Task / 任务**: Visual Question Answering (VQA)
 - **Checkpoint / 权重文件**: `checkpoints/best.pt`
-- **Checkpoint size / 权重大小**: approximately 407 MB
+- **Release / 发布页**: [v0.1.0](https://github.com/dongtingshuo/multimodal-vqa/releases/tag/v0.1.0)
+- **Checkpoint size / 权重大小**: 427,216,108 bytes
+- **SHA256**: `d9638309c2e74a30479332eaabb0f27869555d967eefae0a1eaf981342c3f98c`
 - **Model architecture / 模型结构**: ResNet-50 + DistilBERT + bidirectional cross attention + answer classifier
 - **Answer vocabulary / 答案词表**: Top-3000 normalized answers
 - **Input / 输入**: one RGB image and one English natural-language question
@@ -89,6 +91,10 @@ val_acc: 0.477510
 
 `val_acc` 是简化 Top-1 答案准确率，并不是 VQA 官方 soft accuracy 指标。
 
+This legacy checkpoint predates the runtime `vqa_score` and per-example BCE-loss normalization. Its stored loss must not be compared directly with loss values produced by the current training code. Re-evaluation with the current code reports `vqa_score`, `top5_vqa_score`, hard accuracy, and the revised loss scale.
+
+该历史权重生成于当前 `vqa_score` 和按样本归一化 BCE loss 实现之前，其中保存的 loss 不应与新版训练代码输出直接比较。使用当前代码重新评估会输出 `vqa_score`、`top5_vqa_score`、硬标签准确率和新 loss 尺度。
+
 ## Intended Use / 预期用途
 
 This model is intended for:
@@ -106,38 +112,35 @@ This model is intended for:
 - Questions should be written in English.
 - The model is not a general-purpose large vision-language model.
 - Performance depends on COCO/VQA-style image-question distributions.
-- The evaluation metric currently reported by the checkpoint is simplified Top-1 accuracy.
+- The released checkpoint metadata records simplified Top-1 accuracy only; current evaluation adds VQA soft scores.
 
 - 模型只能从固定 Top-3000 答案词表中预测答案。
 - 问题建议使用英文。
 - 该模型不是通用大规模视觉语言模型。
 - 模型表现依赖 COCO/VQA 风格的图像与问题分布。
-- checkpoint 当前记录的是简化 Top-1 准确率。
+- 已发布 checkpoint 的元数据仅记录简化 Top-1 准确率；当前评估代码已增加 VQA soft score。
 
-## Distribution Recommendation / 发布建议
+## Distribution / 权重发布
 
 Do not commit `checkpoints/best.pt` directly to the normal Git repository. The checkpoint is larger than GitHub's regular file size limit.
 
 不要将 `checkpoints/best.pt` 直接提交到普通 Git 仓库。该权重文件超过 GitHub 普通文件大小限制。
 
-Recommended distribution options:
+The trained checkpoint is published as a verified GitHub Release asset while `checkpoints/` remains ignored by Git.
 
-推荐发布方式：
+已训练权重作为可校验的 GitHub Release 附件发布，`checkpoints/` 仍保持 Git 忽略。
 
-1. **GitHub Release asset / GitHub Release 附件**  
-   Upload `best.pt` as a release artifact and link it from the README.
+```bash
+python scripts/download_checkpoint.py
+```
 
-2. **Git LFS**  
-   Track `*.pt` with Git LFS if users should receive the checkpoint during clone/pull.
-
-3. **External model hosting / 外部模型托管**  
-   Publish the checkpoint on a model hosting platform and document the download URL.
-
-For this repository, the preferred default is to keep `checkpoints/` ignored by Git and publish the model as a release asset.
-
-本仓库推荐默认做法是继续忽略 `checkpoints/`，并将模型作为 Release 附件发布。
+[Direct download / 直接下载](https://github.com/dongtingshuo/multimodal-vqa/releases/download/v0.1.0/best.pt)
 
 ## Loading / 加载方式
+
+Inference and evaluation use architecture and preprocessing settings stored inside the checkpoint. The supplied YAML continues to control local paths, device selection, and runtime batch settings.
+
+推理与评估优先使用 checkpoint 内保存的模型架构和预处理配置；命令行传入的 YAML 继续控制本地路径、设备和运行时批大小。
 
 ```bash
 python demo.py --config configs/default.yaml --checkpoint checkpoints/best.pt
