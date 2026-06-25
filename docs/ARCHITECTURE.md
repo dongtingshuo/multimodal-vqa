@@ -90,6 +90,16 @@ Evaluation reports hard Top-1 accuracy and soft VQA credit. For a predicted answ
 
 评估同时输出硬标签 Top-1 准确率和软标签 VQA 得分。`vqa_score` 取预测答案对应的软标签值；`top5_vqa_score` 取排名前五的答案中最高的软标签得分。
 
+Dataset instances store only sparse answer indices and soft scores. The collator materializes dense answer targets per batch, reducing Python-process memory pressure without changing the model input contract.
+
+Dataset 样本仅保存稀疏答案索引与软分数，collator 在每个 batch 内构造稠密目标，从而降低 Python 进程内存压力，同时保持模型输入接口不变。
+
+## Fine-Tuning Strategy / 微调策略
+
+The optional staged schedule keeps both pretrained backbones frozen initially, then unfreezes the final ResNet residual block and the last DistilBERT transformer layers. The classification/fusion head, image backbone, and text backbone use separate learning rates. Gradient accumulation increases the effective batch size without increasing per-step memory.
+
+可选的分阶段方案先冻结两个预训练 backbone，随后解冻 ResNet 最后一个残差块和 DistilBERT 最后若干 Transformer 层。分类/融合头、图像 backbone 和文本 backbone 使用不同学习率；梯度累积在不增加单步显存的情况下提高有效 batch size。
+
 ## Checkpoints / 模型权重
 
 `train.py` saves the best checkpoint to:
@@ -100,9 +110,9 @@ Evaluation reports hard Top-1 accuracy and soft VQA credit. For a predicted answ
 checkpoints/best.pt
 ```
 
-Checkpoint format version 2 includes model weights, optimizer state, epoch, metrics, full config, answer vocabulary, and runtime metadata. Inference reconstructs architecture and preprocessing from the stored config while preserving local data paths and device settings from the supplied runtime YAML.
+Checkpoint format version 3 includes model weights, optimizer and scheduler states, AMP scaler state, RNG states, training history/state, epoch, metrics, full config, answer vocabulary, and runtime metadata. `latest.pt` supports interruption-safe continuation, while `best.pt` tracks the best validation `vqa_score`. Inference remains backward compatible with released legacy checkpoints.
 
-checkpoint 格式版本 2 包含模型权重、优化器状态、epoch、指标、完整配置、答案词表和运行元数据。推理时使用内置配置重建模型架构与预处理，同时保留运行时 YAML 中的本地数据路径和设备设置。
+checkpoint 格式版本 3 包含模型权重、优化器与调度器状态、AMP scaler 状态、随机数状态、训练历史/状态、epoch、指标、完整配置、答案词表和运行元数据。`latest.pt` 用于安全续训，`best.pt` 追踪最佳验证集 `vqa_score`。推理仍兼容已发布的历史 checkpoint。
 
 Each run also writes `training_history.csv`, `training_curves.png`, and `run_metadata.json` beside the checkpoint.
 
@@ -110,10 +120,11 @@ Each run also writes `training_history.csv`, `training_curves.png`, and `run_met
 
 ## Deployment Surface / 部署入口
 
-The project exposes three runtime surfaces:
+The project exposes four runtime surfaces:
 
 工程提供三个运行入口：
 
 - `infer.py`: command-line single-image inference / 命令行单图推理
 - `evaluate.py`: validation evaluation / 验证集评估
 - `demo.py`: Gradio web demo / Gradio Web 演示
+- `notebooks/kaggle_train.ipynb`: reproducible Kaggle training and artifact export / 可复现 Kaggle 训练与产物导出

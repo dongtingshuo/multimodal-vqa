@@ -34,10 +34,20 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "batch_size": 8,
         "epochs": 5,
         "lr": 1e-4,
+        "image_lr": 1e-5,
+        "text_lr": 5e-6,
         "weight_decay": 0.01,
         "grad_clip_norm": 1.0,
+        "gradient_accumulation_steps": 1,
+        "staged_finetuning": False,
+        "freeze_epochs": 2,
+        "unfreeze_image_blocks": 1,
+        "unfreeze_text_layers": 2,
+        "early_stopping_start_epoch": 6,
+        "early_stopping_patience": 0,
         "checkpoint_dir": "checkpoints",
         "checkpoint_name": "best.pt",
+        "latest_checkpoint_name": "latest.pt",
         "log_every": 20,
         "selection_metric": "vqa_score",
         "use_scheduler": True,
@@ -64,6 +74,28 @@ def load_config(path: str | Path) -> dict[str, Any]:
     with config_path.open("r", encoding="utf-8") as f:
         loaded = yaml.safe_load(f) or {}
     return deep_update(DEFAULT_CONFIG, loaded)
+
+
+def apply_runtime_overrides(config: dict[str, Any], **overrides: Any) -> dict[str, Any]:
+    resolved = deepcopy(config)
+    mapping = {
+        "device": (None, "device"),
+        "data_root": ("data", "root"),
+        "answer_vocab_path": ("data", "answer_vocab_path"),
+        "checkpoint_dir": ("train", "checkpoint_dir"),
+        "epochs": ("train", "epochs"),
+        "max_train_samples": ("data", "max_train_samples"),
+        "max_val_samples": ("data", "max_val_samples"),
+    }
+    for name, value in overrides.items():
+        if value is None or name not in mapping:
+            continue
+        section, key = mapping[name]
+        if section is None:
+            resolved[key] = value
+        else:
+            resolved[section][key] = value
+    return resolved
 
 
 def resolve_checkpoint_config(runtime_config: dict[str, Any], checkpoint: dict[str, Any]) -> dict[str, Any]:

@@ -5,6 +5,7 @@ from pathlib import Path
 
 from PIL import Image
 from torch.utils.data import DataLoader
+from torchvision import transforms
 
 from vqa_project.answers import AnswerVocab, build_answer_vocab, normalize_answer
 from vqa_project.data import VQACollator, VQADataset
@@ -64,9 +65,7 @@ class TinyTokenizer:
 def test_vqa_dataset_and_collator_load_tiny_sample(tmp_path: Path) -> None:
     image_dir = tmp_path / "train2014"
     image_dir.mkdir()
-    Image.new("RGB", (32, 32), color=(255, 0, 0)).save(
-        image_dir / "COCO_train2014_000000000001.jpg"
-    )
+    Image.new("RGB", (32, 32), color=(255, 0, 0)).save(image_dir / "COCO_train2014_000000000001.jpg")
     (tmp_path / "v2_OpenEnded_mscoco_train2014_questions.json").write_text(
         json.dumps(
             {
@@ -109,3 +108,6 @@ def test_vqa_dataset_and_collator_load_tiny_sample(tmp_path: Path) -> None:
     assert batch["images"].shape == (1, 3, 32, 32)
     assert batch["targets"].shape == (1, 2)
     assert batch["labels"].item() == 0
+    assert "target" not in dataset.examples[0]
+    assert dataset.examples[0]["target_indices"] == [0]
+    assert not any(isinstance(transform, transforms.RandomHorizontalFlip) for transform in dataset.transform.transforms)

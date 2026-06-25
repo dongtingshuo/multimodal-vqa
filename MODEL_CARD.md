@@ -4,6 +4,10 @@ This document describes the trained checkpoint used by this repository.
 
 本文档描述本仓库配套使用的已训练模型权重。
 
+This card currently covers the published `v0.1.0` checkpoint. The staged fine-tuning configuration in the repository is a `v0.2` candidate protocol, not a published performance claim. A replacement checkpoint is promoted only after official VQA evaluation clears the documented release gate.
+
+本文档当前对应已发布的 `v0.1.0` 权重。仓库中的分阶段微调配置属于 `v0.2` 候选实验协议，并不代表已经发布的性能结论。替代权重只有在官方 VQA 评估通过文档规定的发布门槛后才会晋升。
+
 ## Model Summary / 模型概要
 
 - **Task / 任务**: Visual Question Answering (VQA)

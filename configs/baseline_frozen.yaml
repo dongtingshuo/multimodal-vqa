@@ -23,20 +23,19 @@ model:
   pretrained_cnn: true
 
 train:
-  batch_size: 32
+  batch_size: 16
   epochs: 10
   lr: 0.0001
   image_lr: 0.00001
   text_lr: 0.000005
   weight_decay: 0.01
   grad_clip_norm: 1.0
-  gradient_accumulation_steps: 1
+  gradient_accumulation_steps: 2
   staged_finetuning: false
-  early_stopping_patience: 0
   use_amp: true
   pin_memory: true
   persistent_workers: true
-  checkpoint_dir: checkpoints
+  checkpoint_dir: checkpoints/baseline_frozen
   checkpoint_name: best.pt
   latest_checkpoint_name: latest.pt
   log_every: 50
@@ -45,6 +44,7 @@ train:
   scheduler_factor: 0.5
   scheduler_patience: 1
   min_lr: 0.000001
+  early_stopping_patience: 0
 
 infer:
   topk: 5

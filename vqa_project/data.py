@@ -49,7 +49,6 @@ def build_image_transform(image_size: int, train: bool) -> transforms.Compose:
             [
                 transforms.Resize((image_size + 32, image_size + 32)),
                 transforms.RandomCrop((image_size, image_size)),
-                transforms.RandomHorizontalFlip(p=0.5),
             ]
         )
     else:
@@ -97,7 +96,7 @@ class VQADataset(Dataset):
             question = questions.get(annotation["question_id"])
             if question is None:
                 continue
-            target, hard_label = self._build_target(annotation)
+            target_indices, target_scores, hard_label = self._build_target(annotation)
             if filter_without_known_answer and hard_label < 0:
                 continue
             examples.append(
@@ -105,7 +104,8 @@ class VQADataset(Dataset):
                     "question_id": annotation["question_id"],
                     "image_id": annotation["image_id"],
                     "question": question["question"],
-                    "target": target,
+                    "target_indices": target_indices,
+                    "target_scores": target_scores,
                     "label": hard_label,
                 }
             )
@@ -113,13 +113,10 @@ class VQADataset(Dataset):
                 break
 
         if not examples:
-            raise ValueError(
-                "No usable VQA examples were loaded. Check data paths and answer vocab coverage."
-            )
+            raise ValueError("No usable VQA examples were loaded. Check data paths and answer vocab coverage.")
         self.examples = examples
 
-    def _build_target(self, annotation: dict[str, Any]) -> tuple[torch.Tensor, int]:
-        target = torch.zeros(len(self.answer_vocab), dtype=torch.float32)
+    def _build_target(self, annotation: dict[str, Any]) -> tuple[list[int], list[float], int]:
         answers = annotation.get("answers") or []
         if answers:
             counts: Counter[int] = Counter()
@@ -127,16 +124,15 @@ class VQADataset(Dataset):
                 idx = self.answer_to_idx.get(normalize_answer(item.get("answer", "")))
                 if idx is not None:
                     counts[idx] += 1
-            for idx, count in counts.items():
-                target[idx] = min(count / 3.0, 1.0)
+            indices = list(counts)
+            scores = [min(counts[idx] / 3.0, 1.0) for idx in indices]
             hard_label = counts.most_common(1)[0][0] if counts else -1
-            return target, hard_label
+            return indices, scores, hard_label
 
         idx = self.answer_to_idx.get(normalize_answer(annotation.get("multiple_choice_answer", "")))
         if idx is not None:
-            target[idx] = 1.0
-            return target, idx
-        return target, -1
+            return [idx], [1.0], idx
+        return [], [], -1
 
     def __len__(self) -> int:
         return len(self.examples)
@@ -149,7 +145,9 @@ class VQADataset(Dataset):
         return {
             "image": image_tensor,
             "question": example["question"],
-            "target": example["target"],
+            "target_indices": torch.tensor(example["target_indices"], dtype=torch.long),
+            "target_scores": torch.tensor(example["target_scores"], dtype=torch.float32),
+            "target_size": len(self.answer_vocab),
             "label": torch.tensor(example["label"], dtype=torch.long),
             "question_id": example["question_id"],
             "image_id": example["image_id"],
@@ -163,6 +161,11 @@ class VQACollator:
 
     def __call__(self, batch: list[dict[str, Any]]) -> dict[str, Any]:
         questions = [item["question"] for item in batch]
+        target_size = int(batch[0]["target_size"])
+        targets = torch.zeros((len(batch), target_size), dtype=torch.float32)
+        for row, item in enumerate(batch):
+            if item["target_indices"].numel():
+                targets[row, item["target_indices"]] = item["target_scores"]
         tokens = self.tokenizer(
             questions,
             padding=True,
@@ -174,7 +177,7 @@ class VQACollator:
             "images": torch.stack([item["image"] for item in batch]),
             "input_ids": tokens["input_ids"],
             "attention_mask": tokens["attention_mask"],
-            "targets": torch.stack([item["target"] for item in batch]),
+            "targets": targets,
             "labels": torch.stack([item["label"] for item in batch]),
             "questions": questions,
             "question_ids": [item["question_id"] for item in batch],

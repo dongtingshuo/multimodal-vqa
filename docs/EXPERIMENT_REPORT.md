@@ -40,9 +40,19 @@ The system is designed for reproducible local experimentation on VQA-format data
 - `mock_loss`：玩具对比流程中的交叉熵。
 - `mock_accuracy`：玩具对比流程中的 Top-1 准确率。
 
-`vqa_score` follows the soft-credit targets used by VQA training. Exact parity with the official toolkit still requires matching its answer normalization and submission protocol.
+`vqa_score` follows the soft-credit targets used by VQA training and is used for checkpoint selection. Published benchmark claims must use exported prediction JSON and the official VQA toolkit.
 
-`vqa_score` 遵循 VQA 训练软标签的计分方式。如需与官方工具完全一致，还需保证答案归一化和提交协议一致。
+`vqa_score` 遵循 VQA 训练软标签计分方式，用于选择 checkpoint。公开 benchmark 结论必须使用导出的预测 JSON 和官方 VQA toolkit。
+
+## Controlled Training Protocol / 受控训练协议
+
+The current protocol compares a frozen cross-attention baseline against staged partial fine-tuning under the same data split, vocabulary, seed, and effective batch size. A second seed is optional for the selected candidate. See [TRAINING_PROTOCOL.md](TRAINING_PROTOCOL.md) for exact configs and commands.
+
+当前协议在相同数据划分、词表、随机种子和有效 batch size 下，对比冻结的 cross-attention 基线与分阶段部分微调。可对候选方案增加第二个随机种子。精确配置与命令见 [TRAINING_PROTOCOL.md](TRAINING_PROTOCOL.md)。
+
+The fine-tuned checkpoint is promoted as the recommended release only when its official VQA score exceeds the frozen baseline by at least 1.0 absolute point. Missing official scores produce a blocked release decision rather than an inferred result.
+
+只有当微调 checkpoint 的官方 VQA 分数比冻结基线至少高 1.0 个绝对点时，才会被提升为推荐发布版本。缺少官方分数时，发布决策会标记为阻塞，不会根据内部指标推断结果。
 
 ## Comparison Workflow / 对比实验流程
 
@@ -113,7 +123,6 @@ Error analysis reports are diagnostic tools for finding recurring failure patter
 
 ## Future Work / 后续工作
 
-- Add an official VQA evaluation-toolkit export and parity test.
 - Add BLIP / ViLT adapters as optional models.
 - Add repeated-run experiment summaries with confidence intervals.
 - Add richer question taxonomy and manual review fields.
@@ -122,7 +131,6 @@ Error analysis reports are diagnostic tools for finding recurring failure patter
 - Add optional remote experiment tracking for full training runs.
 - Add additional vision and text backbone choices behind the same model factory.
 
-- 增加 VQA 官方评估工具导出和一致性测试。
 - 将 BLIP / ViLT adapter 作为可选模型接入。
 - 增加多次运行的实验汇总和置信区间。
 - 增加更细的问题类型体系和人工复核字段。

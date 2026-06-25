@@ -4,6 +4,15 @@
 
 ### Added / 新增
 
+- Unified CPU, CUDA, MPS, and Kaggle execution controls with command-line path and sample overrides.
+- 增加统一的 CPU、CUDA、MPS 与 Kaggle 执行控制，以及命令行路径和样本数覆盖参数。
+- Controlled frozen-baseline and staged partial fine-tuning configs with differential learning rates, gradient accumulation, and early stopping.
+- 增加受控冻结基线与分阶段部分微调配置，支持差分学习率、梯度累积和早停。
+- Format-v3 resumable checkpoints with optimizer, scheduler, AMP scaler, RNG, history, and stage state.
+- 增加 format-v3 可续训 checkpoint，保存优化器、调度器、AMP scaler、随机数、历史和训练阶段状态。
+- Kaggle notebook, data preflight validation, official VQA prediction export/evaluation adapter, and experiment release gate.
+- 增加 Kaggle notebook、数据预检、官方 VQA 预测导出/评估适配器和实验发布门槛。
+
 - Bilingual professional documentation for project usage, architecture, and troubleshooting.
 - 项目使用、架构和故障排查文档已补充为专业双语说明。
 - Runtime documentation for data preparation, training, evaluation, inference, and Gradio demo.
@@ -28,6 +37,11 @@
 - 增加数据集、checkpoint、缓存和生成产物的 Git 忽略规则。
 
 ### Changed / 调整
+
+- Dataset targets are stored sparsely and materialized per batch to reduce worker memory pressure.
+- Dataset 目标改为稀疏存储并在 batch 内构造，以降低 worker 内存压力。
+- Removed horizontal image flipping because it can invalidate directional VQA answers.
+- 移除水平翻转增强，避免方向类 VQA 答案失真。
 
 - Reworked README into a professional bilingual project overview.
 - 将 README 调整为专业、克制的双语项目概览。

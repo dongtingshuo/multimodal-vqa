@@ -3,7 +3,7 @@ from __future__ import annotations
 import argparse
 
 from vqa_project.answers import AnswerVocab
-from vqa_project.config import load_config, resolve_checkpoint_config, resolve_device
+from vqa_project.config import apply_runtime_overrides, load_config, resolve_checkpoint_config, resolve_device
 from vqa_project.engine import load_checkpoint
 from vqa_project.hf import load_tokenizer
 from vqa_project.inference import predict
@@ -17,12 +17,13 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--image", required=True)
     parser.add_argument("--question", required=True)
     parser.add_argument("--topk", type=int, default=None)
+    parser.add_argument("--device", choices=["auto", "cpu", "cuda", "mps"])
     return parser.parse_args()
 
 
 def main() -> None:
     args = parse_args()
-    config = load_config(args.config)
+    config = apply_runtime_overrides(load_config(args.config), device=args.device)
     device = resolve_device(config["device"], allow_fallback=True)
     checkpoint = load_checkpoint(args.checkpoint, device)
     config = resolve_checkpoint_config(config, checkpoint)

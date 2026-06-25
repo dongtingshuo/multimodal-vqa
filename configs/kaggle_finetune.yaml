@@ -2,10 +2,10 @@ seed: 42
 device: cuda
 
 data:
-  root: data/vqa
+  root: /kaggle/input/multimodal-vqa-data/vqa
   train_split: train
   val_split: val
-  answer_vocab_path: data/answer_vocab.json
+  answer_vocab_path: /kaggle/working/answer_vocab.json
   answer_vocab_size: 3000
   max_train_samples: null
   max_val_samples: null
@@ -23,20 +23,22 @@ model:
   pretrained_cnn: true
 
 train:
-  batch_size: 32
-  epochs: 10
+  batch_size: 16
+  epochs: 12
   lr: 0.0001
   image_lr: 0.00001
   text_lr: 0.000005
   weight_decay: 0.01
   grad_clip_norm: 1.0
-  gradient_accumulation_steps: 1
-  staged_finetuning: false
-  early_stopping_patience: 0
+  gradient_accumulation_steps: 2
+  staged_finetuning: true
+  freeze_epochs: 2
+  unfreeze_image_blocks: 1
+  unfreeze_text_layers: 2
   use_amp: true
   pin_memory: true
   persistent_workers: true
-  checkpoint_dir: checkpoints
+  checkpoint_dir: /kaggle/working/multimodal-vqa/finetune
   checkpoint_name: best.pt
   latest_checkpoint_name: latest.pt
   log_every: 50
@@ -45,6 +47,8 @@ train:
   scheduler_factor: 0.5
   scheduler_patience: 1
   min_lr: 0.000001
+  early_stopping_start_epoch: 6
+  early_stopping_patience: 3
 
 infer:
   topk: 5

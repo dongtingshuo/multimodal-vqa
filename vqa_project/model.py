@@ -70,15 +70,22 @@ def _masked_mean(tokens: torch.Tensor, attention_mask: torch.Tensor) -> torch.Te
     return token_sum / denominator
 
 
+def _set_requires_grad(module: nn.Module, enabled: bool) -> None:
+    for parameter in module.parameters():
+        parameter.requires_grad = enabled
+
+
+def _set_batch_norm_eval(module: nn.Module) -> None:
+    for child in module.modules():
+        if isinstance(child, nn.modules.batchnorm._BatchNorm):
+            child.eval()
+
+
 class CrossAttentionFusion(nn.Module):
     def __init__(self, hidden_dim: int, num_heads: int, dropout: float) -> None:
         super().__init__()
-        self.text_to_image = nn.MultiheadAttention(
-            hidden_dim, num_heads, dropout=dropout, batch_first=True
-        )
-        self.image_to_text = nn.MultiheadAttention(
-            hidden_dim, num_heads, dropout=dropout, batch_first=True
-        )
+        self.text_to_image = nn.MultiheadAttention(hidden_dim, num_heads, dropout=dropout, batch_first=True)
+        self.image_to_text = nn.MultiheadAttention(hidden_dim, num_heads, dropout=dropout, batch_first=True)
         self.text_norm = nn.LayerNorm(hidden_dim)
         self.image_norm = nn.LayerNorm(hidden_dim)
         self.dropout = nn.Dropout(dropout)
@@ -140,22 +147,76 @@ class VQAModel(nn.Module):
             nn.Linear(hidden_dim, answer_vocab_size),
         )
         self.backbones_frozen = False
+        self.finetune_stage = "full"
+        self._trainable_image_modules: list[nn.Module] = []
+        self._trainable_text_modules: list[nn.Module] = []
 
         if freeze_backbones:
             self.freeze_backbones()
 
     def freeze_backbones(self) -> None:
         self.backbones_frozen = True
-        for parameter in self.image_encoder.parameters():
-            parameter.requires_grad = False
-        for parameter in self.text_encoder.parameters():
-            parameter.requires_grad = False
+        self.finetune_stage = "frozen"
+        self._trainable_image_modules = []
+        self._trainable_text_modules = []
+        _set_requires_grad(self.image_encoder, False)
+        _set_requires_grad(self.text_encoder, False)
+
+    def set_finetune_stage(
+        self,
+        stage: str,
+        image_blocks: int = 1,
+        text_layers: int = 2,
+    ) -> None:
+        if stage not in {"frozen", "partial", "full"}:
+            raise ValueError(f"Unsupported fine-tune stage: {stage}")
+
+        _set_requires_grad(self.image_encoder, False)
+        _set_requires_grad(self.text_encoder, False)
+        self._trainable_image_modules = []
+        self._trainable_text_modules = []
+
+        if stage == "partial":
+            if isinstance(self.image_encoder, ImageEncoder):
+                residual_blocks = list(self.image_encoder.features.children())[-4:]
+                self._trainable_image_modules = residual_blocks[-max(1, min(image_blocks, 4)) :]
+            else:
+                self._trainable_image_modules = [self.image_encoder]
+
+            transformer = getattr(self.text_encoder, "transformer", None)
+            layers = list(getattr(transformer, "layer", []))
+            if layers:
+                self._trainable_text_modules = layers[-max(1, min(text_layers, len(layers))) :]
+            else:
+                self._trainable_text_modules = [self.text_encoder]
+
+            for module in self._trainable_image_modules + self._trainable_text_modules:
+                _set_requires_grad(module, True)
+        elif stage == "full":
+            _set_requires_grad(self.image_encoder, True)
+            _set_requires_grad(self.text_encoder, True)
+
+        self.finetune_stage = stage
+        self.backbones_frozen = stage == "frozen"
+        if self.training:
+            self._apply_backbone_train_modes()
+
+    def _apply_backbone_train_modes(self) -> None:
+        if self.finetune_stage == "full":
+            return
+        self.image_encoder.eval()
+        self.text_encoder.eval()
+        if self.finetune_stage == "partial":
+            for module in self._trainable_image_modules:
+                module.train()
+                _set_batch_norm_eval(module)
+            for module in self._trainable_text_modules:
+                module.train()
 
     def train(self, mode: bool = True):
         super().train(mode)
-        if self.backbones_frozen:
-            self.image_encoder.eval()
-            self.text_encoder.eval()
+        if mode:
+            self._apply_backbone_train_modes()
         return self
 
     def forward(

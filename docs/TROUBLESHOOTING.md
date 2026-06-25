@@ -76,6 +76,28 @@ If training starts moving with this config, the issue is DataLoader startup pres
 
 如果这样配置后训练开始推进，问题通常是 DataLoader 启动压力，而不是模型计算本身。
 
+Run the preflight validator before retrying workers:
+
+重新启动 worker 前先执行数据预检：
+
+```bash
+python scripts/validate_vqa_data.py --root data/vqa --sample-images 20
+```
+
+On Kaggle, keep input data under `/kaggle/input` and write checkpoints only under `/kaggle/working`. See [KAGGLE.md](KAGGLE.md).
+
+在 Kaggle 中，输入数据应保留在 `/kaggle/input`，checkpoint 只能写入 `/kaggle/working`。详见 [KAGGLE.md](KAGGLE.md)。
+
+## Resume Is Rejected / 断点续训被拒绝
+
+Training resume requires a format-v3 `latest.pt`. Released legacy checkpoints remain valid for inference but do not contain complete scheduler, AMP, RNG, and history state. A resume is also rejected when model architecture, preprocessing, optimizer, accumulation, or stage schedule differs from the saved run.
+
+训练续跑要求使用 format-v3 `latest.pt`。已发布的历史 checkpoint 仍可用于推理，但不包含完整的调度器、AMP、随机数和历史状态。如果模型架构、预处理、优化器、梯度累积或阶段计划与已保存运行不一致，也会拒绝续训。
+
+Changing the device, data path, checkpoint directory, or total epoch target is allowed through CLI overrides.
+
+设备、数据路径、checkpoint 目录和总 epoch 目标可以通过命令行覆盖。
+
 ## Gradio Shows Model Not Loaded / Gradio 显示模型未加载
 
 Possible causes:

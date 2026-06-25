@@ -14,7 +14,7 @@ import gradio as gr
 from PIL import Image
 
 from vqa_project.answers import AnswerVocab
-from vqa_project.config import load_config, resolve_checkpoint_config, resolve_device
+from vqa_project.config import apply_runtime_overrides, load_config, resolve_checkpoint_config, resolve_device
 from vqa_project.engine import load_checkpoint
 from vqa_project.hf import load_tokenizer
 from vqa_project.inference import predict
@@ -30,6 +30,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--inbrowser", action="store_true")
     parser.add_argument("--offline", action="store_true", help="Only use locally cached Hugging Face model files.")
     parser.add_argument("--share", action="store_true")
+    parser.add_argument("--device", choices=["auto", "cpu", "cuda", "mps"])
     return parser.parse_args()
 
 
@@ -44,8 +45,8 @@ def find_available_port(preferred_port: int, server_name: str, attempts: int = 5
     raise OSError(f"No free port found in range {preferred_port}-{preferred_port + attempts - 1}")
 
 
-def build_predictor(config_path: str, checkpoint_path: str):
-    config = load_config(config_path)
+def build_predictor(config_path: str, checkpoint_path: str, device_override: str | None = None):
+    config = apply_runtime_overrides(load_config(config_path), device=device_override)
     device = resolve_device(config["device"], allow_fallback=True)
     checkpoint_file = Path(checkpoint_path)
     if not checkpoint_file.exists():
@@ -107,7 +108,7 @@ def main() -> None:
     args = parse_args()
     if args.offline:
         os.environ["VQA_HF_LOCAL_ONLY"] = "1"
-    predictor = build_predictor(args.config, args.checkpoint)
+    predictor = build_predictor(args.config, args.checkpoint, args.device)
     server_port = find_available_port(args.server_port, args.server_name)
     if server_port != args.server_port:
         print(f"Port {args.server_port} is busy; using {server_port} instead.")

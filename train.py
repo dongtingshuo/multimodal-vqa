@@ -8,9 +8,16 @@ import torch
 from torch.utils.data import DataLoader
 
 from vqa_project.answers import AnswerVocab, build_answer_vocab
-from vqa_project.config import load_config, resolve_device
+from vqa_project.config import apply_runtime_overrides, load_config, resolve_device
 from vqa_project.data import VQACollator, VQADataset, default_annotation_path
-from vqa_project.engine import evaluate, save_checkpoint, set_seed, train_one_epoch
+from vqa_project.engine import (
+    evaluate,
+    load_checkpoint,
+    restore_training_checkpoint,
+    save_checkpoint,
+    set_seed,
+    train_one_epoch,
+)
 from vqa_project.hf import load_tokenizer
 from vqa_project.model import build_model
 from vqa_project.tracking import (
@@ -20,15 +27,36 @@ from vqa_project.tracking import (
     write_json,
     write_training_history,
 )
+from vqa_project.training import (
+    build_optimizer,
+    configure_finetune_stage,
+    count_parameters,
+    stage_for_epoch,
+    validate_resume_config,
+)
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Train a ResNet + DistilBERT VQA model.")
+    parser = argparse.ArgumentParser(description="Train a multimodal VQA model.")
     parser.add_argument("--config", default="configs/default.yaml")
+    parser.add_argument("--device", choices=["auto", "cpu", "cuda", "mps"])
+    parser.add_argument("--data-root")
+    parser.add_argument("--answer-vocab-path")
+    parser.add_argument("--checkpoint-dir")
+    parser.add_argument("--epochs", type=int)
+    parser.add_argument("--max-train-samples", type=int)
+    parser.add_argument("--max-val-samples", type=int)
+    parser.add_argument("--resume", help="Resume from a format-v3 latest checkpoint.")
     return parser.parse_args()
 
 
-def load_or_build_answer_vocab(data_cfg: dict) -> AnswerVocab:
+def load_or_build_answer_vocab(data_cfg: dict, checkpoint: dict | None = None) -> AnswerVocab:
+    if checkpoint and checkpoint.get("idx_to_answer"):
+        answer_vocab = AnswerVocab(list(checkpoint["idx_to_answer"]))
+        if len(answer_vocab) != int(data_cfg["answer_vocab_size"]):
+            raise ValueError("Resume checkpoint answer vocabulary does not match the configured vocabulary size.")
+        return answer_vocab
+
     vocab_path = Path(data_cfg["answer_vocab_path"])
     expected_size = int(data_cfg["answer_vocab_size"])
     if vocab_path.exists():
@@ -44,7 +72,14 @@ def load_or_build_answer_vocab(data_cfg: dict) -> AnswerVocab:
 
 
 def build_dataloader(
-    dataset, batch_size: int, shuffle: bool, data_cfg: dict, train_cfg: dict, device: torch.device, collator
+    dataset,
+    batch_size: int,
+    shuffle: bool,
+    data_cfg: dict,
+    train_cfg: dict,
+    device: torch.device,
+    collator,
+    generator: torch.Generator | None = None,
 ):
     num_workers = int(data_cfg.get("num_workers", 0))
     pin_memory = bool(train_cfg.get("pin_memory", device.type == "cuda")) and device.type == "cuda"
@@ -57,12 +92,29 @@ def build_dataloader(
         collate_fn=collator,
         pin_memory=pin_memory,
         persistent_workers=persistent_workers,
+        generator=generator,
     )
+
+
+def _head_learning_rate(optimizer: torch.optim.Optimizer) -> float:
+    for group in optimizer.param_groups:
+        if group.get("group_name") == "head_decay":
+            return float(group["lr"])
+    return float(optimizer.param_groups[0]["lr"])
 
 
 def main() -> None:
     args = parse_args()
-    config = load_config(args.config)
+    config = apply_runtime_overrides(
+        load_config(args.config),
+        device=args.device,
+        data_root=args.data_root,
+        answer_vocab_path=args.answer_vocab_path,
+        checkpoint_dir=args.checkpoint_dir,
+        epochs=args.epochs,
+        max_train_samples=args.max_train_samples,
+        max_val_samples=args.max_val_samples,
+    )
     set_seed(config["seed"])
     device = resolve_device(config["device"])
     if device.type == "cuda":
@@ -71,11 +123,14 @@ def main() -> None:
     else:
         print(f"Using device: {device}")
 
+    resume_checkpoint = load_checkpoint(args.resume, device) if args.resume else None
+    if resume_checkpoint is not None:
+        validate_resume_config(config, resume_checkpoint)
+
     data_cfg = config["data"]
     model_cfg = config["model"]
     train_cfg = config["train"]
-
-    answer_vocab = load_or_build_answer_vocab(data_cfg)
+    answer_vocab = load_or_build_answer_vocab(data_cfg, resume_checkpoint)
     tokenizer = load_tokenizer(model_cfg["text_model_name"])
     collator = VQACollator(tokenizer, data_cfg["max_question_length"])
 
@@ -97,6 +152,7 @@ def main() -> None:
     )
     print(f"answer_vocab={len(answer_vocab)} train_examples={len(train_dataset)} val_examples={len(val_dataset)}")
 
+    data_generator = torch.Generator().manual_seed(int(config["seed"]))
     train_loader = build_dataloader(
         train_dataset,
         batch_size=train_cfg["batch_size"],
@@ -105,6 +161,7 @@ def main() -> None:
         train_cfg=train_cfg,
         device=device,
         collator=collator,
+        generator=data_generator,
     )
     val_loader = build_dataloader(
         val_dataset,
@@ -117,11 +174,7 @@ def main() -> None:
     )
 
     model = build_model(model_cfg, answer_vocab_size=len(answer_vocab)).to(device)
-    optimizer = torch.optim.AdamW(
-        (parameter for parameter in model.parameters() if parameter.requires_grad),
-        lr=train_cfg["lr"],
-        weight_decay=train_cfg["weight_decay"],
-    )
+    optimizer = build_optimizer(model, train_cfg)
     scheduler = None
     if train_cfg.get("use_scheduler", True):
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
@@ -131,22 +184,60 @@ def main() -> None:
             patience=int(train_cfg.get("scheduler_patience", 1)),
             min_lr=float(train_cfg.get("min_lr", 1e-6)),
         )
+    scaler = torch.amp.GradScaler("cuda", enabled=bool(train_cfg.get("use_amp", False) and device.type == "cuda"))
 
-    checkpoint_path = Path(train_cfg["checkpoint_dir"]) / train_cfg["checkpoint_name"]
-    artifact_dir = checkpoint_path.parent
+    artifact_dir = Path(train_cfg["checkpoint_dir"])
+    checkpoint_path = artifact_dir / train_cfg["checkpoint_name"]
+    latest_path = artifact_dir / train_cfg.get("latest_checkpoint_name", "latest.pt")
     history_path = artifact_dir / "training_history.csv"
     curves_path = artifact_dir / "training_curves.png"
     metadata_path = artifact_dir / "run_metadata.json"
     run_metadata = collect_run_metadata(args.config, device)
     run_metadata["selection_metric"] = train_cfg.get("selection_metric", "vqa_score")
-    write_json(metadata_path, run_metadata)
+    run_metadata["effective_config"] = config
 
     history: list[dict] = []
     best_metric = float("-inf")
+    global_step = 0
+    epochs_without_improvement = 0
+    start_epoch = 1
+    if resume_checkpoint is not None:
+        restored = restore_training_checkpoint(
+            resume_checkpoint,
+            model,
+            optimizer,
+            scheduler,
+            scaler,
+            data_generator,
+        )
+        start_epoch = int(resume_checkpoint["epoch"]) + 1
+        history = list(restored.get("history") or [])
+        best_metric = float(restored.get("best_metric", best_metric))
+        global_step = int(restored.get("global_step", 0))
+        epochs_without_improvement = int(restored.get("epochs_without_improvement", 0))
+        run_metadata["resumed_from"] = str(Path(args.resume).resolve())
+        run_metadata["resumed_epoch"] = int(resume_checkpoint["epoch"])
+
+    total_epochs = int(train_cfg["epochs"])
+    if start_epoch > total_epochs:
+        raise ValueError(f"Checkpoint already reached epoch {start_epoch - 1}; configured epochs={total_epochs}.")
+
+    artifact_dir.mkdir(parents=True, exist_ok=True)
+    write_json(metadata_path, run_metadata)
     selection_metric = str(train_cfg.get("selection_metric", "vqa_score"))
     training_started = time.perf_counter()
-    for epoch in range(1, train_cfg["epochs"] + 1):
+    elapsed_offset = float(history[-1].get("total_seconds", 0.0)) if history else 0.0
+
+    for epoch in range(start_epoch, total_epochs + 1):
         epoch_started = time.perf_counter()
+        stage = stage_for_epoch(model_cfg, train_cfg, epoch)
+        configure_finetune_stage(model, stage, train_cfg)
+        parameter_counts = count_parameters(model)
+        print(
+            f"epoch={epoch}/{total_epochs} stage={stage} "
+            f"trainable={parameter_counts['trainable']:,}/{parameter_counts['total']:,}"
+        )
+
         train_metrics = train_one_epoch(
             model,
             train_loader,
@@ -155,46 +246,32 @@ def main() -> None:
             grad_clip_norm=train_cfg["grad_clip_norm"],
             log_every=train_cfg["log_every"],
             use_amp=train_cfg.get("use_amp", False),
+            scaler=scaler,
+            gradient_accumulation_steps=train_cfg.get("gradient_accumulation_steps", 1),
         )
+        global_step += int(train_metrics["optimizer_steps"])
         val_metrics = evaluate(model, val_loader, device, use_amp=train_cfg.get("use_amp", False))
-        current_lr = float(optimizer.param_groups[0]["lr"])
         if selection_metric not in val_metrics:
             available = ", ".join(sorted(val_metrics))
             raise ValueError(f"Unknown selection_metric '{selection_metric}'. Available metrics: {available}")
         selected_value = float(val_metrics[selection_metric])
         if scheduler is not None:
             scheduler.step(selected_value)
-
-        print(
-            f"epoch={epoch} "
-            f"train_loss={train_metrics['loss']:.4f} "
-            f"train_acc={train_metrics['accuracy']:.4f} "
-            f"train_vqa={train_metrics['vqa_score']:.4f} "
-            f"val_loss={val_metrics['loss']:.4f} "
-            f"val_acc={val_metrics['accuracy']:.4f} "
-            f"val_vqa={val_metrics['vqa_score']:.4f} "
-            f"val_top5_vqa={val_metrics['top5_vqa_score']:.4f} "
-            f"lr={current_lr:.2e}"
-        )
+        current_lr = _head_learning_rate(optimizer)
 
         is_best = selected_value > best_metric
         if is_best:
             best_metric = selected_value
-            save_checkpoint(
-                checkpoint_path,
-                model,
-                optimizer,
-                epoch,
-                val_metrics,
-                config,
-                answer_vocab,
-                metadata=run_metadata,
-            )
-            print(f"saved best checkpoint to {checkpoint_path}")
+            epochs_without_improvement = 0
+        elif epoch >= int(train_cfg.get("early_stopping_start_epoch", 6)):
+            epochs_without_improvement += 1
 
+        total_seconds = elapsed_offset + time.perf_counter() - training_started
         history.append(
             {
                 "epoch": epoch,
+                "stage": stage,
+                "trainable_parameters": parameter_counts["trainable"],
                 "train_loss": train_metrics["loss"],
                 "train_accuracy": train_metrics["accuracy"],
                 "train_vqa_score": train_metrics["vqa_score"],
@@ -205,18 +282,55 @@ def main() -> None:
                 "val_top5_vqa_score": val_metrics["top5_vqa_score"],
                 "learning_rate": current_lr,
                 "epoch_seconds": time.perf_counter() - epoch_started,
-                "total_seconds": time.perf_counter() - training_started,
+                "total_seconds": total_seconds,
                 "best_checkpoint": is_best,
             }
         )
+        training_state = {
+            "history": history,
+            "best_metric": best_metric,
+            "global_step": global_step,
+            "epochs_without_improvement": epochs_without_improvement,
+            "finetune_stage": stage,
+        }
+        checkpoint_kwargs = {
+            "model": model,
+            "optimizer": optimizer,
+            "epoch": epoch,
+            "metrics": val_metrics,
+            "config": config,
+            "answer_vocab": answer_vocab,
+            "metadata": run_metadata,
+            "scheduler": scheduler,
+            "scaler": scaler,
+            "training_state": training_state,
+            "data_generator": data_generator,
+        }
+        save_checkpoint(latest_path, **checkpoint_kwargs)
+        if is_best:
+            save_checkpoint(checkpoint_path, **checkpoint_kwargs)
+            print(f"saved best checkpoint to {checkpoint_path}")
+
         write_training_history(history_path, history)
         save_training_curves(curves_path, history)
+        print(
+            f"train_loss={train_metrics['loss']:.4f} train_vqa={train_metrics['vqa_score']:.4f} "
+            f"val_loss={val_metrics['loss']:.4f} val_acc={val_metrics['accuracy']:.4f} "
+            f"val_vqa={val_metrics['vqa_score']:.4f} val_top5_vqa={val_metrics['top5_vqa_score']:.4f} "
+            f"lr={current_lr:.2e} latest={latest_path}"
+        )
+
+        patience = int(train_cfg.get("early_stopping_patience", 0))
+        if patience > 0 and epochs_without_improvement >= patience:
+            print(f"early stopping after {epochs_without_improvement} epochs without improvement")
+            break
 
     run_metadata["finished_at"] = utc_now()
-    run_metadata["total_seconds"] = time.perf_counter() - training_started
+    run_metadata["total_seconds"] = elapsed_offset + time.perf_counter() - training_started
     run_metadata["best_metric"] = best_metric
     run_metadata["artifacts"] = {
         "checkpoint": str(checkpoint_path),
+        "latest_checkpoint": str(latest_path),
         "history": str(history_path),
         "curves": str(curves_path),
     }
