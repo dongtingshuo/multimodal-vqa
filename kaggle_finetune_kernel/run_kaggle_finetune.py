@@ -1,6 +1,8 @@
 import os
 import shutil
 import subprocess
+import urllib.request
+import zipfile
 from pathlib import Path
 
 WORK_ROOT = Path(os.environ.get("WORK_ROOT", "/kaggle/working/multimodal-vqa"))
@@ -16,6 +18,14 @@ ANSWER_VOCAB = WORK_ROOT / "answer_vocab.json"
 PREDICTIONS_PATH = CHECKPOINT_DIR / "val_predictions.json"
 ARCHIVE_PATH = Path("/kaggle/working/multimodal-vqa-finetune-artifacts")
 NORMALIZED_DATA_ROOT = Path(os.environ.get("DATA_ROOT", WORK_ROOT / "vqa"))
+DOWNLOAD_ROOT = WORK_ROOT / "downloads"
+
+VQA_DOWNLOADS = {
+    "v2_OpenEnded_mscoco_train2014_questions.json": "https://s3.amazonaws.com/cvmlp/vqa/mscoco/vqa/v2_Questions_Train_mscoco.zip",
+    "v2_mscoco_train2014_annotations.json": "https://s3.amazonaws.com/cvmlp/vqa/mscoco/vqa/v2_Annotations_Train_mscoco.zip",
+    "v2_OpenEnded_mscoco_val2014_questions.json": "https://s3.amazonaws.com/cvmlp/vqa/mscoco/vqa/v2_Questions_Val_mscoco.zip",
+    "v2_mscoco_val2014_annotations.json": "https://s3.amazonaws.com/cvmlp/vqa/mscoco/vqa/v2_Annotations_Val_mscoco.zip",
+}
 
 
 def run(command, cwd=None):
@@ -28,6 +38,43 @@ def first_existing(candidates):
         if candidate.exists():
             return candidate
     raise FileNotFoundError("None of these paths exist: " + ", ".join(str(path) for path in candidates))
+
+
+def find_dir(root, name):
+    direct = root / name
+    if direct.is_dir():
+        return direct
+    for path in root.rglob(name):
+        if path.is_dir():
+            return path
+    raise FileNotFoundError(f"Could not find directory {name!r} under {root}")
+
+
+def find_file(root, name):
+    direct = root / name
+    if direct.is_file():
+        return direct
+    for path in root.rglob(name):
+        if path.is_file():
+            return path
+    raise FileNotFoundError(f"Could not find file {name!r} under {root}")
+
+
+def download_vqa_file(filename):
+    DOWNLOAD_ROOT.mkdir(parents=True, exist_ok=True)
+    existing = list(DOWNLOAD_ROOT.rglob(filename))
+    if existing:
+        return existing[0]
+
+    url = VQA_DOWNLOADS[filename]
+    zip_path = DOWNLOAD_ROOT / Path(url).name
+    if not zip_path.exists():
+        print(f"Downloading {url}", flush=True)
+        urllib.request.urlretrieve(url, zip_path)
+    print(f"Extracting {zip_path}", flush=True)
+    with zipfile.ZipFile(zip_path) as archive:
+        archive.extractall(DOWNLOAD_ROOT)
+    return find_file(DOWNLOAD_ROOT, filename)
 
 
 def link_path(source, target):
@@ -48,36 +95,18 @@ def normalize_vqa_data():
             input_root / "multimodal-vqa-data",
         ]
     )
-    image_root = first_existing([raw_root / "images", raw_root])
-    annotation_root = first_existing([raw_root / "annotations", raw_root])
 
     mapping = {
-        "train2014": first_existing([image_root / "train2014", raw_root / "train2014"]),
-        "val2014": first_existing([image_root / "val2014", raw_root / "val2014"]),
-        "v2_OpenEnded_mscoco_train2014_questions.json": first_existing(
-            [
-                annotation_root / "v2_OpenEnded_mscoco_train2014_questions.json",
-                raw_root / "v2_OpenEnded_mscoco_train2014_questions.json",
-            ]
+        "train2014": find_dir(raw_root, "train2014"),
+        "val2014": find_dir(raw_root, "val2014"),
+        "v2_OpenEnded_mscoco_train2014_questions.json": download_vqa_file(
+            "v2_OpenEnded_mscoco_train2014_questions.json"
         ),
-        "v2_mscoco_train2014_annotations.json": first_existing(
-            [
-                annotation_root / "v2_mscoco_train2014_annotations.json",
-                raw_root / "v2_mscoco_train2014_annotations.json",
-            ]
+        "v2_mscoco_train2014_annotations.json": download_vqa_file("v2_mscoco_train2014_annotations.json"),
+        "v2_OpenEnded_mscoco_val2014_questions.json": download_vqa_file(
+            "v2_OpenEnded_mscoco_val2014_questions.json"
         ),
-        "v2_OpenEnded_mscoco_val2014_questions.json": first_existing(
-            [
-                annotation_root / "v2_OpenEnded_mscoco_val2014_questions.json",
-                raw_root / "v2_OpenEnded_mscoco_val2014_questions.json",
-            ]
-        ),
-        "v2_mscoco_val2014_annotations.json": first_existing(
-            [
-                annotation_root / "v2_mscoco_val2014_annotations.json",
-                raw_root / "v2_mscoco_val2014_annotations.json",
-            ]
-        ),
+        "v2_mscoco_val2014_annotations.json": download_vqa_file("v2_mscoco_val2014_annotations.json"),
     }
 
     NORMALIZED_DATA_ROOT.mkdir(parents=True, exist_ok=True)

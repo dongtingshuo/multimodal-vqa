@@ -87,9 +87,9 @@ The repository also includes a script kernel in [`kaggle_finetune_kernel/`](../k
 kaggle kernels push -p kaggle_finetune_kernel
 ```
 
-The script uses the public Kaggle dataset `sagnikkayalcse52/coco2014vqa` by default and normalizes its mounted layout into the internal VQA directory structure under `/kaggle/working/multimodal-vqa/vqa`.
+The script uses the public Kaggle dataset `sagnikkayalcse52/coco2014vqa` as the COCO image source by default, downloads the official VQA v2 question/annotation JSON files at runtime, and normalizes everything into the internal VQA directory structure under `/kaggle/working/multimodal-vqa/vqa`.
 
-脚本默认挂载公开 Kaggle 数据集 `sagnikkayalcse52/coco2014vqa`，并在 `/kaggle/working/multimodal-vqa/vqa` 下自动规范化为项目内部训练所需的 VQA 目录结构。
+脚本默认将公开 Kaggle 数据集 `sagnikkayalcse52/coco2014vqa` 作为 COCO 图片源，在运行时下载官方 VQA v2 questions/annotations JSON，并在 `/kaggle/working/multimodal-vqa/vqa` 下自动规范化为项目内部训练所需的 VQA 目录结构。
 
 ## Official Evaluation / 官方评估
 
