@@ -77,6 +77,20 @@ Import [`notebooks/kaggle_train.ipynb`](../notebooks/kaggle_train.ipynb). Set `D
 
 导入 [`notebooks/kaggle_train.ipynb`](../notebooks/kaggle_train.ipynb)。在首个代码单元设置 `DATA_ROOT`、`CONFIG_PATH`、`RUN_NAME`、`TOTAL_EPOCHS` 和 `GIT_REF`。正式训练应锁定 Release tag 或 commit SHA。
 
+## Kaggle API Kernel / Kaggle API 远程任务
+
+The repository also includes a script kernel in [`kaggle_finetune_kernel/`](../kaggle_finetune_kernel). It can be pushed from a local machine with Kaggle API credentials:
+
+仓库也提供了 [`kaggle_finetune_kernel/`](../kaggle_finetune_kernel) 脚本任务目录，可在本机通过 Kaggle API 直接推送运行：
+
+```bash
+kaggle kernels push -p kaggle_finetune_kernel
+```
+
+The script uses the public Kaggle dataset `sagnikkayalcse52/coco2014vqa` by default and normalizes its mounted layout into the internal VQA directory structure under `/kaggle/working/multimodal-vqa/vqa`.
+
+脚本默认挂载公开 Kaggle 数据集 `sagnikkayalcse52/coco2014vqa`，并在 `/kaggle/working/multimodal-vqa/vqa` 下自动规范化为项目内部训练所需的 VQA 目录结构。
+
 ## Official Evaluation / 官方评估
 
 ```bash
