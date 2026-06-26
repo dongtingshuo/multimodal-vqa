@@ -3,6 +3,7 @@ import os
 import re
 import shutil
 import subprocess
+import time
 import urllib.request
 import zipfile
 from pathlib import Path
@@ -40,6 +41,29 @@ def run(command, cwd=None):
     subprocess.run([str(part) for part in command], cwd=cwd, check=True)
 
 
+def read_kaggle_secret(client, name, attempts=8, delay_seconds=3):
+    for attempt in range(1, attempts + 1):
+        try:
+            value = client.get_secret(name)
+        except Exception as exc:
+            if attempt == attempts:
+                print(f"Kaggle Secret {name} is not configured after {attempts} attempts: {exc}", flush=True)
+                return None
+            print(
+                f"Kaggle Secret {name} is not ready yet "
+                f"(attempt {attempt}/{attempts}): {exc}; retrying...",
+                flush=True,
+            )
+            time.sleep(delay_seconds)
+            continue
+        if value:
+            return value
+        if attempt < attempts:
+            print(f"Kaggle Secret {name} returned an empty value; retrying...", flush=True)
+            time.sleep(delay_seconds)
+    return None
+
+
 def load_kaggle_secrets():
     try:
         from kaggle_secrets import UserSecretsClient
@@ -53,11 +77,7 @@ def load_kaggle_secrets():
         if os.environ.get(name):
             loaded.append(name)
             continue
-        try:
-            value = client.get_secret(name)
-        except Exception as exc:
-            print(f"Kaggle Secret {name} is not configured: {exc}", flush=True)
-            continue
+        value = read_kaggle_secret(client, name)
         if value:
             os.environ[name] = value
             loaded.append(name)
