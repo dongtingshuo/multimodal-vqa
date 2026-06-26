@@ -10,9 +10,9 @@ from pathlib import Path
 WORK_ROOT = Path(os.environ.get("WORK_ROOT", "/kaggle/working/multimodal-vqa"))
 REPO_ROOT = Path(os.environ.get("REPO_ROOT", "/kaggle/working/multimodal-vqa-repo"))
 RUN_NAME = os.environ.get("RUN_NAME", "finetune")
-CONFIG_PATH = os.environ.get("CONFIG_PATH", "configs/kaggle_finetune.yaml")
-GIT_REF = os.environ.get("GIT_REF", "e26ba28")
-TOTAL_EPOCHS = os.environ.get("TOTAL_EPOCHS", "12")
+CONFIG_PATH = os.environ.get("CONFIG_PATH", "configs/kaggle_strong.yaml")
+GIT_REF = os.environ.get("GIT_REF", "main")
+TOTAL_EPOCHS = os.environ.get("TOTAL_EPOCHS", "24")
 RAW_DATA_ROOT = Path(os.environ.get("RAW_DATA_ROOT", "/kaggle/input/coco2014vqa/Dataset"))
 TORCH_VERSION = os.environ.get("TORCH_VERSION", "2.4.1+cu121")
 TORCHVISION_VERSION = os.environ.get("TORCHVISION_VERSION", "0.19.1+cu121")
@@ -64,6 +64,7 @@ def install_training_dependencies():
             "PyYAML>=6.0",
             "tqdm>=4.66",
             "matplotlib>=3.8",
+            "wandb>=0.17",
         ],
         cwd=REPO_ROOT,
     )
@@ -238,6 +239,8 @@ def main():
         "--epochs",
         TOTAL_EPOCHS,
     ]
+    if os.environ.get("WANDB_API_KEY"):
+        train_command.extend(["--wandb", "--wandb-tags", "kaggle", "strong-cross-attention"])
 
     latest_checkpoint = CHECKPOINT_DIR / "latest.pt"
     if latest_checkpoint.exists():

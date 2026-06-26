@@ -28,3 +28,22 @@ def test_each_model_variant_accepts_mock_batch_and_outputs_logits() -> None:
         )
         logits = model(images, input_ids, attention_mask)
         assert logits.shape == (batch_size, answer_vocab_size)
+
+
+def test_strong_cross_attention_is_registered_and_has_larger_fusion_head() -> None:
+    model = build_model(
+        {
+            "name": "strong_cross_attention",
+            "answer_vocab_size": 7,
+            "hidden_dim": 16,
+            "num_attention_heads": 4,
+            "dropout": 0.0,
+            "freeze_backbones": True,
+            "pretrained_cnn": False,
+            "mock_backbones": True,
+            "mock_hidden_size": 16,
+        }
+    )
+    first_linear = next(module for module in model.classifier if isinstance(module, torch.nn.Linear))
+    assert first_linear.in_features == 64
+    assert "strong_cross_attention" in MODEL_REGISTRY

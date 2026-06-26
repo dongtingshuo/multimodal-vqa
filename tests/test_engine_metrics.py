@@ -23,6 +23,14 @@ def test_vqa_loss_is_normalized_per_example() -> None:
     assert torch.equal(vqa_bce_loss(logits, targets), expected)
 
 
+def test_vqa_loss_supports_soft_target_smoothing() -> None:
+    logits = torch.zeros(1, 2)
+    targets = torch.tensor([[1.0, 0.0]])
+    smoothed = torch.tensor([[0.75, 0.25]])
+    expected = nn.functional.binary_cross_entropy_with_logits(logits, smoothed, reduction="sum")
+    assert torch.equal(vqa_bce_loss(logits, targets, label_smoothing=0.5), expected)
+
+
 def test_vqa_scores_use_soft_target_credit() -> None:
     logits = torch.tensor([[5.0, 1.0, 0.0], [0.0, 1.0, 5.0]])
     targets = torch.tensor([[0.3, 1.0, 0.0], [0.0, 0.6, 0.9]])

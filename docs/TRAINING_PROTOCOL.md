@@ -13,6 +13,7 @@ Evaluate whether staged backbone fine-tuning improves the official VQA validatio
 | Feature concatenation | `configs/baseline_concat.yaml` | 10 | 42 | 32 |
 | Frozen Cross-Attention | `configs/baseline_frozen.yaml` | 10 | 42 | 32 |
 | Staged fine-tuning | `configs/kaggle_finetune.yaml` | up to 12 | 42 | 32 |
+| Strong Cross-Attention | `configs/kaggle_strong.yaml` | up to 24 | 42 | 32 |
 | Fine-tuning repeat | `configs/kaggle_finetune.yaml` | up to 12 | 1337 | 32 |
 
 The repeat run is optional when the available Kaggle GPU quota is insufficient. It must be identified as missing rather than replaced by toy metrics.
@@ -32,6 +33,21 @@ The repeat run is optional when the available Kaggle GPU quota is insufficient. 
 - 头部学习率 `1e-4`，图像层学习率 `1e-5`，文本层学习率 `5e-6`。
 - 物理 batch 16，梯度累积 2，有效 batch 32。
 - epoch 6 后启用 patience 3 的 early stopping。
+
+## Strong Training Recipe / 强化训练方案
+
+`configs/kaggle_strong.yaml` is the recommended candidate for the next performance run. It uses `strong_cross_attention`, gated bidirectional attention, attention pooling, lightweight image augmentation, warmup-cosine scheduling, label smoothing, and a longer staged fine-tuning window.
+
+`configs/kaggle_strong.yaml` 是下一轮性能实验的推荐候选配置。它使用 `strong_cross_attention`、门控双向注意力、注意力池化、轻量图像增强、warmup-cosine 学习率调度、label smoothing 和更长的分阶段微调窗口。
+
+```bash
+python train.py --config configs/kaggle_strong.yaml --device cuda --wandb
+python scripts/summarize_runs.py --runs-dir runs
+```
+
+W&B is optional. Use `WANDB_API_KEY` locally or as a Kaggle Secret; never write it into config files, notebooks, or commits.
+
+W&B 是可选能力。本地或 Kaggle Secret 中设置 `WANDB_API_KEY` 即可启用；不要把密钥写入配置文件、notebook 或 commit。
 
 ## Evaluation and Release Gate / 评估与发布门槛
 

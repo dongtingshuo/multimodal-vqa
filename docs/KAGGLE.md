@@ -49,7 +49,20 @@ python train.py \
   --data-root /kaggle/input/<dataset>/vqa \
   --answer-vocab-path /kaggle/working/answer_vocab.json \
   --checkpoint-dir /kaggle/working/multimodal-vqa/finetune
+
+# Kaggle stronger candidate with optional W&B tracking
+python train.py \
+  --config configs/kaggle_strong.yaml \
+  --device cuda \
+  --data-root /kaggle/input/<dataset>/vqa \
+  --answer-vocab-path /kaggle/working/answer_vocab.json \
+  --checkpoint-dir /kaggle/working/multimodal-vqa/strong \
+  --wandb
 ```
+
+For W&B, create Kaggle Secrets named `WANDB_API_KEY` and optionally `WANDB_ENTITY`. The key is read from the environment and must not be committed to the repository.
+
+如需使用 W&B，请在 Kaggle Secrets 中创建 `WANDB_API_KEY`，可选创建 `WANDB_ENTITY`。密钥只从环境变量读取，不应提交到仓库。
 
 ## Resume / 断点续训
 
@@ -87,9 +100,9 @@ The repository also includes a script kernel in [`kaggle_finetune_kernel/`](../k
 kaggle kernels push -p kaggle_finetune_kernel
 ```
 
-The script uses the public Kaggle dataset `sagnikkayalcse52/coco2014vqa` as the COCO image source by default, downloads the official VQA v2 question/annotation JSON files at runtime, and normalizes everything into the internal VQA directory structure under `/kaggle/working/multimodal-vqa/vqa`.
+The script uses the public Kaggle dataset `sagnikkayalcse52/coco2014vqa` as the COCO image source by default, downloads the official VQA v2 question/annotation JSON files at runtime, and normalizes everything into the internal VQA directory structure under `/kaggle/working/multimodal-vqa/vqa`. By default it runs `configs/kaggle_strong.yaml`; set `CONFIG_PATH=configs/kaggle_finetune.yaml` to reproduce the earlier fine-tuning run.
 
-脚本默认将公开 Kaggle 数据集 `sagnikkayalcse52/coco2014vqa` 作为 COCO 图片源，在运行时下载官方 VQA v2 questions/annotations JSON，并在 `/kaggle/working/multimodal-vqa/vqa` 下自动规范化为项目内部训练所需的 VQA 目录结构。
+脚本默认将公开 Kaggle 数据集 `sagnikkayalcse52/coco2014vqa` 作为 COCO 图片源，在运行时下载官方 VQA v2 questions/annotations JSON，并在 `/kaggle/working/multimodal-vqa/vqa` 下自动规范化为项目内部训练所需的 VQA 目录结构。默认运行 `configs/kaggle_strong.yaml`；如需复现上一轮微调，请设置 `CONFIG_PATH=configs/kaggle_finetune.yaml`。
 
 ## Official Evaluation / 官方评估
 

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import random
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 import torch
 from torch import nn
@@ -30,9 +30,12 @@ def _cuda_amp_enabled(device: torch.device, use_amp: bool) -> bool:
     return bool(use_amp and device.type == "cuda")
 
 
-def vqa_bce_loss(logits: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
+def vqa_bce_loss(logits: torch.Tensor, targets: torch.Tensor, label_smoothing: float = 0.0) -> torch.Tensor:
     """Return the standard per-example VQA multilabel loss."""
     batch_size = max(int(logits.shape[0]), 1)
+    smoothing = max(0.0, min(float(label_smoothing), 1.0))
+    if smoothing > 0:
+        targets = targets.mul(1.0 - smoothing).add(0.5 * smoothing)
     return nn.functional.binary_cross_entropy_with_logits(logits, targets, reduction="sum") / batch_size
 
 
@@ -55,6 +58,10 @@ def train_one_epoch(
     use_amp: bool = False,
     scaler: torch.amp.GradScaler | None = None,
     gradient_accumulation_steps: int = 1,
+    label_smoothing: float = 0.0,
+    step_callback: Callable[[dict[str, float]], None] | None = None,
+    epoch: int | None = None,
+    global_step_start: int = 0,
 ) -> dict[str, float]:
     model.train()
     amp_enabled = _cuda_amp_enabled(device, use_amp)
@@ -77,7 +84,7 @@ def train_one_epoch(
 
         with torch.amp.autocast(device_type=device.type, enabled=amp_enabled):
             logits = model(batch["images"], batch["input_ids"], batch["attention_mask"])
-            loss = vqa_bce_loss(logits, batch["targets"])
+            loss = vqa_bce_loss(logits, batch["targets"], label_smoothing=label_smoothing)
 
         loss_divisor = final_group_size if final_group_size and step >= final_group_start else accumulation_steps
         scaler.scale(loss / loss_divisor).backward()
@@ -102,12 +109,25 @@ def train_one_epoch(
         total_loss += loss.item() * batch_size
 
         if step % max(log_every, 1) == 0:
+            running = {
+                "epoch": float(epoch or 0),
+                "step": float(step),
+                "global_step": float(global_step_start + optimizer_steps),
+                "train/loss": total_loss / total_examples,
+                "train/accuracy": total_correct / total_examples,
+                "train/vqa_score": total_vqa_score / total_examples,
+                "train/top5_vqa_score": total_top5_vqa_score / total_examples,
+                "train/lr": float(optimizer.param_groups[0]["lr"]),
+            }
             progress.set_postfix(
-                loss=total_loss / total_examples,
-                acc=total_correct / total_examples,
-                vqa=total_vqa_score / total_examples,
-                lr=optimizer.param_groups[0]["lr"],
+                loss=running["train/loss"],
+                acc=running["train/accuracy"],
+                vqa=running["train/vqa_score"],
+                top5=running["train/top5_vqa_score"],
+                lr=running["train/lr"],
             )
+            if step_callback is not None:
+                step_callback(running)
 
     return {
         "loss": total_loss / max(total_examples, 1),

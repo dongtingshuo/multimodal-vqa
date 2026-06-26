@@ -11,7 +11,7 @@ A research-oriented multimodal Visual Question Answering system with data prepar
 ## Core Capabilities / 核心能力
 
 - **Multimodal architecture / 多模态架构**: ResNet-50 image encoder, DistilBERT text encoder, bidirectional cross attention, and answer classification head.
-- **Model variants / 模型变体**: `text_only`, `image_only`, `baseline_concat`, and `cross_attention` are available through a shared model factory.
+- **Model variants / 模型变体**: `text_only`, `image_only`, `baseline_concat`, `cross_attention`, and `strong_cross_attention` are available through a shared model factory.
 - **Comparison workflow / 对比流程**: lightweight report generation for validating model-variant comparison without external downloads.
 - **Question-type error analysis / 问题类型错误分析**: keyword-based diagnostics for color, count, object, location, yes/no, and other questions.
 - **Full VQA workflow / 完整 VQA 流程**: data preparation, vocabulary construction, training, validation, checkpointing, inference, and web demo.
@@ -20,7 +20,7 @@ A research-oriented multimodal Visual Question Answering system with data prepar
 - **Controlled fine-tuning / 受控微调**: optional frozen-to-partial backbone unfreezing, differential learning rates, gradient accumulation, and early stopping.
 - **Reproducible configuration / 可复现实验配置**: all runtime settings are centralized in YAML config files.
 - **VQA-aware evaluation / VQA 评估**: soft-answer VQA score, Top-5 VQA score, hard Top-1 accuracy, and per-example multilabel loss.
-- **Experiment tracking / 实验记录**: epoch history, curves, learning rate, elapsed time, environment versions, and Git commit metadata.
+- **Experiment tracking / 实验记录**: run directories, epoch history, curves, learning rate, elapsed time, environment versions, Git commit metadata, and optional W&B logging.
 - **Resumable checkpoints / 可续训权重**: format-v3 checkpoints preserve model, optimizer, scheduler, AMP scaler, RNG, history, and stage state for state-complete continuation.
 - **Toy demo / 玩具演示**: tiny example files support offline workflow checks for reports and diagnostics.
 - **Operational demo / 可运行演示**: Gradio interface supports image upload, question input, and Top-k answer display.
@@ -34,6 +34,7 @@ A research-oriented multimodal Visual Question Answering system with data prepar
 │   ├── default.yaml          # Full GPU training config / 全量 GPU 训练配置
 │   ├── baseline_frozen.yaml  # Controlled frozen baseline / 受控冻结基线
 │   ├── kaggle_finetune.yaml  # Staged Kaggle fine-tuning / Kaggle 分阶段微调
+│   ├── kaggle_strong.yaml    # Stronger Kaggle training recipe / Kaggle 强化训练配置
 │   ├── cross_attention.yaml  # Cross-modal attention variant / 跨模态注意力变体
 │   ├── baseline_concat.yaml  # Feature-concatenation baseline / 特征拼接基线
 │   ├── text_only.yaml        # Text-only baseline / 纯文本基线
@@ -51,6 +52,7 @@ A research-oriented multimodal Visual Question Answering system with data prepar
 │   ├── validate_vqa_data.py  # Dataset preflight validation / 数据预检
 │   ├── run_official_vqa_eval.py # Official toolkit adapter / 官方评估适配器
 │   ├── summarize_experiments.py # Comparison and release gate / 对比与发布门槛
+│   ├── summarize_runs.py     # Run-directory leaderboard / run 目录汇总
 │   ├── run_model_comparison.py
 │   └── run_error_analysis.py
 ├── tests/
@@ -183,6 +185,7 @@ Controlled frozen baseline and staged fine-tuning / 受控冻结基线与分阶�
 ```bash
 python train.py --config configs/baseline_frozen.yaml --device cuda
 python train.py --config configs/kaggle_finetune.yaml --device cuda
+python train.py --config configs/kaggle_strong.yaml --device cuda --wandb
 ```
 
 Default training config / 默认训练配置：
@@ -211,11 +214,23 @@ Training artifacts / 训练产物：
 checkpoints/training_history.csv
 checkpoints/training_curves.png
 checkpoints/run_metadata.json
+checkpoints/run_summary.json
 ```
 
 The best checkpoint is selected by validation `vqa_score`; `latest.pt` is written every epoch for interruption-safe continuation. A ReduceLROnPlateau scheduler tracks the same metric.
 
 默认按验证集 `vqa_score` 选择最佳权重；每个 epoch 都保存 `latest.pt`，用于中断后继续训练。ReduceLROnPlateau 学习率调度器追踪同一指标。
+
+Optional W&B tracking / 可选 W&B 追踪：
+
+```bash
+export WANDB_API_KEY=...
+python train.py --config configs/kaggle_strong.yaml --wandb --wandb-tags kaggle strong
+```
+
+Store real secrets in environment variables or Kaggle Secrets only. `.env.example` documents supported variables; never commit a real `.env` file.
+
+真实密钥只应存放在环境变量或 Kaggle Secrets 中。`.env.example` 仅记录支持的变量名，不要提交真实 `.env` 文件。
 
 Resume a format-v3 run / 继续 format-v3 训练：
 

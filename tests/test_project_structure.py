@@ -111,3 +111,39 @@ def test_vqa_dataset_and_collator_load_tiny_sample(tmp_path: Path) -> None:
     assert "target" not in dataset.examples[0]
     assert dataset.examples[0]["target_indices"] == [0]
     assert not any(isinstance(transform, transforms.RandomHorizontalFlip) for transform in dataset.transform.transforms)
+
+
+def test_training_augmentation_can_be_enabled(tmp_path: Path) -> None:
+    image_dir = tmp_path / "train2014"
+    image_dir.mkdir()
+    Image.new("RGB", (32, 32), color=(255, 0, 0)).save(image_dir / "COCO_train2014_000000000001.jpg")
+    (tmp_path / "v2_OpenEnded_mscoco_train2014_questions.json").write_text(
+        json.dumps({"questions": [{"question_id": 10, "image_id": 1, "question": "What color?"}]}),
+        encoding="utf-8",
+    )
+    (tmp_path / "v2_mscoco_train2014_annotations.json").write_text(
+        json.dumps(
+            {
+                "annotations": [
+                    {
+                        "question_id": 10,
+                        "image_id": 1,
+                        "answers": [{"answer": "red"} for _ in range(10)],
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    dataset = VQADataset(
+        root=tmp_path,
+        split="train",
+        answer_vocab=AnswerVocab(["red"]),
+        image_size=32,
+        train=True,
+        augmentation={"enabled": True, "random_resized_crop": True, "horizontal_flip": 0.5, "color_jitter": 0.1},
+    )
+
+    assert any(isinstance(transform, transforms.RandomResizedCrop) for transform in dataset.transform.transforms)
+    assert any(isinstance(transform, transforms.RandomHorizontalFlip) for transform in dataset.transform.transforms)

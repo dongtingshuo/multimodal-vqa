@@ -42,17 +42,29 @@ def build_image_path(image_dir: Path, image_id: int, split: str) -> Path:
     return image_dir / f"COCO_{coco_split}_{image_id:012d}.jpg"
 
 
-def build_image_transform(image_size: int, train: bool) -> transforms.Compose:
+def build_image_transform(image_size: int, train: bool, augmentation: dict[str, Any] | None = None) -> transforms.Compose:
     ops: list[Any] = []
-    if train:
-        ops.extend(
-            [
-                transforms.Resize((image_size + 32, image_size + 32)),
-                transforms.RandomCrop((image_size, image_size)),
-            ]
-        )
+    augmentation = augmentation or {}
+    use_augmentation = bool(train and augmentation.get("enabled", False))
+    if use_augmentation and augmentation.get("random_resized_crop", True):
+        ops.append(transforms.RandomResizedCrop(image_size, scale=(0.8, 1.0), ratio=(0.9, 1.1)))
     else:
-        ops.append(transforms.Resize((image_size, image_size)))
+        if train:
+            ops.extend(
+                [
+                    transforms.Resize((image_size + 32, image_size + 32)),
+                    transforms.RandomCrop((image_size, image_size)),
+                ]
+            )
+        else:
+            ops.append(transforms.Resize((image_size, image_size)))
+    horizontal_flip = float(augmentation.get("horizontal_flip", 0.0))
+    if use_augmentation and horizontal_flip > 0:
+        ops.append(transforms.RandomHorizontalFlip(p=min(horizontal_flip, 1.0)))
+    color_jitter = float(augmentation.get("color_jitter", 0.0))
+    if use_augmentation and color_jitter > 0:
+        jitter = min(color_jitter, 1.0)
+        ops.append(transforms.ColorJitter(brightness=jitter, contrast=jitter, saturation=jitter, hue=min(jitter / 2, 0.5)))
     ops.extend(
         [
             transforms.ToTensor(),
@@ -75,13 +87,14 @@ class VQADataset(Dataset):
         image_dir: str | Path | None = None,
         train: bool = False,
         filter_without_known_answer: bool = True,
+        augmentation: dict[str, Any] | None = None,
     ) -> None:
         self.root = Path(root)
         self.split = split
         self.answer_vocab = answer_vocab
         self.answer_to_idx = answer_vocab.answer_to_idx
         self.image_dir = Path(image_dir) if image_dir else default_image_dir(self.root, split)
-        self.transform = build_image_transform(image_size, train=train)
+        self.transform = build_image_transform(image_size, train=train, augmentation=augmentation)
 
         q_path = Path(question_path) if question_path else default_question_path(self.root, split)
         a_path = Path(annotation_path) if annotation_path else default_annotation_path(self.root, split)

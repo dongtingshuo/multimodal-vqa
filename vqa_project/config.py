@@ -20,6 +20,12 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "image_size": 224,
         "max_question_length": 32,
         "num_workers": 0,
+        "augmentation": {
+            "enabled": False,
+            "random_resized_crop": True,
+            "horizontal_flip": 0.5,
+            "color_jitter": 0.0,
+        },
     },
     "model": {
         "name": "cross_attention",
@@ -51,9 +57,26 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "log_every": 20,
         "selection_metric": "vqa_score",
         "use_scheduler": True,
+        "scheduler": "plateau",
         "scheduler_factor": 0.5,
         "scheduler_patience": 1,
+        "warmup_ratio": 0.1,
         "min_lr": 1e-6,
+        "label_smoothing": 0.0,
+    },
+    "runtime": {
+        "run_dir": "runs",
+        "run_name": None,
+        "use_run_dir": False,
+    },
+    "tracking": {
+        "wandb": {
+            "enabled": False,
+            "project": "multimodal-vqa",
+            "entity": None,
+            "tags": [],
+            "log_checkpoints": False,
+        }
     },
     "infer": {"topk": 5},
 }
@@ -86,15 +109,25 @@ def apply_runtime_overrides(config: dict[str, Any], **overrides: Any) -> dict[st
         "epochs": ("train", "epochs"),
         "max_train_samples": ("data", "max_train_samples"),
         "max_val_samples": ("data", "max_val_samples"),
+        "run_name": ("runtime", "run_name"),
+        "run_dir": ("runtime", "run_dir"),
+        "wandb_enabled": ("tracking", "wandb", "enabled"),
+        "wandb_project": ("tracking", "wandb", "project"),
+        "wandb_tags": ("tracking", "wandb", "tags"),
     }
     for name, value in overrides.items():
         if value is None or name not in mapping:
             continue
-        section, key = mapping[name]
-        if section is None:
-            resolved[key] = value
-        else:
-            resolved[section][key] = value
+        path = mapping[name]
+        if path[0] is None:
+            resolved[path[1]] = value
+            continue
+        target = resolved
+        for key in path[:-1]:
+            target = target[key]
+        target[path[-1]] = value
+    if overrides.get("run_name") is not None or overrides.get("run_dir") is not None:
+        resolved["runtime"]["use_run_dir"] = True
     return resolved
 
 

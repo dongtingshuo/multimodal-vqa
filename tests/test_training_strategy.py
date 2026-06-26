@@ -6,6 +6,7 @@ from vqa_project.config import load_config
 from vqa_project.model import build_model
 from vqa_project.training import (
     build_optimizer,
+    build_scheduler,
     configure_finetune_stage,
     resume_signature,
     stage_for_epoch,
@@ -82,6 +83,26 @@ def test_resume_signature_rejects_effective_training_changes() -> None:
 
     assert resume_signature(original) != resume_signature(changed_batch)
     assert resume_signature(original) != resume_signature(changed_samples)
+
+
+def test_warmup_cosine_scheduler_steps_without_metric() -> None:
+    model = build_model(model_config())
+    optimizer = build_optimizer(model, train_config())
+    scheduler = build_scheduler(
+        optimizer,
+        {
+            **train_config(),
+            "use_scheduler": True,
+            "scheduler": "warmup_cosine",
+            "warmup_ratio": 0.5,
+        },
+        total_epochs=4,
+    )
+    assert scheduler is not None
+    first_lr = optimizer.param_groups[0]["lr"]
+    optimizer.step()
+    scheduler.step()
+    assert optimizer.param_groups[0]["lr"] != pytest.approx(first_lr)
 
 
 def test_legacy_checkpoint_cannot_resume() -> None:

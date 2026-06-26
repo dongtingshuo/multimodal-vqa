@@ -57,6 +57,50 @@ def build_optimizer(model: nn.Module, train_cfg: dict[str, Any]) -> torch.optim.
     return torch.optim.AdamW(parameter_groups)
 
 
+def build_scheduler(
+    optimizer: torch.optim.Optimizer,
+    train_cfg: dict[str, Any],
+    total_epochs: int,
+) -> torch.optim.lr_scheduler.LRScheduler | torch.optim.lr_scheduler.ReduceLROnPlateau | None:
+    if not train_cfg.get("use_scheduler", True):
+        return None
+    scheduler_name = str(train_cfg.get("scheduler", "plateau")).lower()
+    if scheduler_name == "plateau":
+        return torch.optim.lr_scheduler.ReduceLROnPlateau(
+            optimizer,
+            mode="max",
+            factor=float(train_cfg.get("scheduler_factor", 0.5)),
+            patience=int(train_cfg.get("scheduler_patience", 1)),
+            min_lr=float(train_cfg.get("min_lr", 1e-6)),
+        )
+    if scheduler_name == "warmup_cosine":
+        warmup_epochs = max(0, int(round(total_epochs * float(train_cfg.get("warmup_ratio", 0.1)))))
+        total_epochs = max(int(total_epochs), 1)
+
+        def lr_lambda(epoch_index: int) -> float:
+            epoch_number = epoch_index + 1
+            if warmup_epochs > 0 and epoch_number <= warmup_epochs:
+                return max(epoch_number / warmup_epochs, 1e-8)
+            decay_epochs = max(total_epochs - warmup_epochs, 1)
+            progress = min(max((epoch_number - warmup_epochs) / decay_epochs, 0.0), 1.0)
+            return max(0.5 * (1.0 + torch.cos(torch.tensor(progress * torch.pi))).item(), 1e-8)
+
+        return torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=lr_lambda)
+    raise ValueError("Unsupported train.scheduler. Expected 'plateau' or 'warmup_cosine'.")
+
+
+def step_scheduler(
+    scheduler: torch.optim.lr_scheduler.LRScheduler | torch.optim.lr_scheduler.ReduceLROnPlateau | None,
+    metric: float,
+) -> None:
+    if scheduler is None:
+        return
+    if isinstance(scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau):
+        scheduler.step(metric)
+    else:
+        scheduler.step()
+
+
 def count_parameters(model: nn.Module) -> dict[str, int]:
     total = sum(parameter.numel() for parameter in model.parameters())
     trainable = sum(parameter.numel() for parameter in model.parameters() if parameter.requires_grad)
@@ -97,9 +141,12 @@ def resume_signature(config: dict[str, Any]) -> str:
                 "unfreeze_text_layers",
                 "selection_metric",
                 "use_scheduler",
+                "scheduler",
                 "scheduler_factor",
                 "scheduler_patience",
+                "warmup_ratio",
                 "min_lr",
+                "label_smoothing",
                 "early_stopping_start_epoch",
                 "early_stopping_patience",
             )

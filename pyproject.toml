@@ -38,6 +38,7 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["build>=1.2", "pytest>=8.0", "ruff>=0.8"]
+tracking = ["wandb>=0.17"]
 
 [project.urls]
 Homepage = "https://github.com/dongtingshuo/multimodal-vqa"

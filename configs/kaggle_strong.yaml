@@ -1,0 +1,76 @@
+seed: 42
+device: cuda
+
+data:
+  root: /kaggle/input/multimodal-vqa-data/vqa
+  train_split: train
+  val_split: val
+  answer_vocab_path: /kaggle/working/answer_vocab.json
+  answer_vocab_size: 3000
+  max_train_samples: null
+  max_val_samples: null
+  image_size: 224
+  max_question_length: 32
+  num_workers: 4
+  augmentation:
+    enabled: true
+    random_resized_crop: true
+    horizontal_flip: 0.0
+    color_jitter: 0.08
+
+model:
+  name: strong_cross_attention
+  text_model_name: distilbert-base-uncased
+  hidden_dim: 512
+  num_attention_heads: 8
+  dropout: 0.25
+  freeze_backbones: true
+  pretrained_cnn: true
+
+train:
+  batch_size: 16
+  epochs: 24
+  lr: 0.00012
+  image_lr: 0.000008
+  text_lr: 0.000004
+  weight_decay: 0.01
+  grad_clip_norm: 1.0
+  gradient_accumulation_steps: 2
+  staged_finetuning: true
+  freeze_epochs: 2
+  unfreeze_image_blocks: 2
+  unfreeze_text_layers: 3
+  use_amp: true
+  pin_memory: true
+  persistent_workers: true
+  checkpoint_dir: /kaggle/working/multimodal-vqa/strong
+  checkpoint_name: best.pt
+  latest_checkpoint_name: latest.pt
+  log_every: 50
+  selection_metric: vqa_score
+  use_scheduler: true
+  scheduler: warmup_cosine
+  warmup_ratio: 0.1
+  min_lr: 0.000001
+  label_smoothing: 0.02
+  early_stopping_start_epoch: 10
+  early_stopping_patience: 5
+
+runtime:
+  run_dir: /kaggle/working/multimodal-vqa/runs
+  run_name: kaggle-strong
+  use_run_dir: false
+
+tracking:
+  wandb:
+    enabled: false
+    project: multimodal-vqa
+    entity: null
+    tags:
+      - kaggle
+      - strong-cross-attention
+      - coco2014-vqa
+    log_checkpoints: false
+
+infer:
+  topk: 5

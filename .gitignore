@@ -36,6 +36,7 @@ logs/
 # Local configuration
 .env
 .env.*
+!.env.example
 
 # IDE and OS files
 .idea/

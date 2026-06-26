@@ -119,6 +119,71 @@ class CrossAttentionFusion(nn.Module):
         return torch.cat([pooled_image, pooled_text], dim=-1)
 
 
+class AttentionPool(nn.Module):
+    def __init__(self, hidden_dim: int) -> None:
+        super().__init__()
+        self.scorer = nn.Linear(hidden_dim, 1)
+
+    def forward(self, tokens: torch.Tensor, attention_mask: torch.Tensor | None = None) -> torch.Tensor:
+        scores = self.scorer(tokens).squeeze(-1)
+        if attention_mask is not None:
+            scores = scores.masked_fill(attention_mask == 0, torch.finfo(scores.dtype).min)
+        weights = torch.softmax(scores, dim=1).unsqueeze(-1)
+        return (tokens * weights).sum(dim=1)
+
+
+class StrongCrossAttentionFusion(nn.Module):
+    def __init__(self, hidden_dim: int, num_heads: int, dropout: float) -> None:
+        super().__init__()
+        self.text_to_image = nn.MultiheadAttention(hidden_dim, num_heads, dropout=dropout, batch_first=True)
+        self.image_to_text = nn.MultiheadAttention(hidden_dim, num_heads, dropout=dropout, batch_first=True)
+        self.text_gate = nn.Linear(hidden_dim * 2, hidden_dim)
+        self.image_gate = nn.Linear(hidden_dim * 2, hidden_dim)
+        self.text_norm = nn.LayerNorm(hidden_dim)
+        self.image_norm = nn.LayerNorm(hidden_dim)
+        self.text_pool = AttentionPool(hidden_dim)
+        self.image_pool = AttentionPool(hidden_dim)
+        self.dropout = nn.Dropout(dropout)
+
+    def forward(
+        self,
+        image_tokens: torch.Tensor,
+        text_tokens: torch.Tensor,
+        text_attention_mask: torch.Tensor,
+    ) -> torch.Tensor:
+        text_padding_mask = text_attention_mask == 0
+        attended_text, _ = self.text_to_image(
+            query=text_tokens,
+            key=image_tokens,
+            value=image_tokens,
+            need_weights=False,
+        )
+        attended_image, _ = self.image_to_text(
+            query=image_tokens,
+            key=text_tokens,
+            value=text_tokens,
+            key_padding_mask=text_padding_mask,
+            need_weights=False,
+        )
+
+        text_gate = torch.sigmoid(self.text_gate(torch.cat([text_tokens, attended_text], dim=-1)))
+        image_gate = torch.sigmoid(self.image_gate(torch.cat([image_tokens, attended_image], dim=-1)))
+        text_tokens = self.text_norm(text_tokens + self.dropout(text_gate * attended_text))
+        image_tokens = self.image_norm(image_tokens + self.dropout(image_gate * attended_image))
+
+        pooled_text = self.text_pool(text_tokens, text_attention_mask)
+        pooled_image = self.image_pool(image_tokens)
+        return torch.cat(
+            [
+                pooled_image,
+                pooled_text,
+                pooled_image * pooled_text,
+                torch.abs(pooled_image - pooled_text),
+            ],
+            dim=-1,
+        )
+
+
 class VQAModel(nn.Module):
     def __init__(
         self,
@@ -233,6 +298,45 @@ class VQAModel(nn.Module):
         text_tokens = self.text_projection(text_tokens)
         fused = self.fusion(image_tokens, text_tokens, attention_mask)
         return self.classifier(fused)
+
+
+class StrongCrossAttentionVQAModel(VQAModel):
+    def __init__(
+        self,
+        answer_vocab_size: int,
+        text_model_name: str = "distilbert-base-uncased",
+        hidden_dim: int = 512,
+        num_attention_heads: int = 8,
+        dropout: float = 0.2,
+        freeze_backbones: bool = True,
+        pretrained_cnn: bool = True,
+        mock_backbones: bool = False,
+        mock_hidden_size: int = 32,
+    ) -> None:
+        super().__init__(
+            answer_vocab_size=answer_vocab_size,
+            text_model_name=text_model_name,
+            hidden_dim=hidden_dim,
+            num_attention_heads=num_attention_heads,
+            dropout=dropout,
+            freeze_backbones=False,
+            pretrained_cnn=pretrained_cnn,
+            mock_backbones=mock_backbones,
+            mock_hidden_size=mock_hidden_size,
+        )
+        self.fusion = StrongCrossAttentionFusion(hidden_dim, num_attention_heads, dropout)
+        self.classifier = nn.Sequential(
+            nn.LayerNorm(hidden_dim * 4),
+            nn.Linear(hidden_dim * 4, hidden_dim * 2),
+            nn.GELU(),
+            nn.Dropout(dropout),
+            nn.Linear(hidden_dim * 2, hidden_dim),
+            nn.GELU(),
+            nn.Dropout(dropout),
+            nn.Linear(hidden_dim, answer_vocab_size),
+        )
+        if freeze_backbones:
+            self.freeze_backbones()
 
 
 class BaselineConcatVQAModel(nn.Module):
@@ -393,6 +497,7 @@ class ImageOnlyVQAModel(nn.Module):
 
 MODEL_REGISTRY = {
     "cross_attention": VQAModel,
+    "strong_cross_attention": StrongCrossAttentionVQAModel,
     "baseline_concat": BaselineConcatVQAModel,
     "text_only": TextOnlyVQAModel,
     "image_only": ImageOnlyVQAModel,

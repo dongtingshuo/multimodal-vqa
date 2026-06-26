@@ -58,7 +58,7 @@ def build_predictor(config_path: str, checkpoint_path: str, device_override: str
         def missing_checkpoint(_image, _question, _topk):
             return message
 
-        return missing_checkpoint
+        return missing_checkpoint, message
 
     try:
         checkpoint = load_checkpoint(checkpoint_file, device)
@@ -71,13 +71,23 @@ def build_predictor(config_path: str, checkpoint_path: str, device_override: str
         tokenizer = load_tokenizer(model_cfg["text_model_name"])
         model = build_model(model_cfg, answer_vocab_size=len(answer_vocab)).to(device)
         model.load_state_dict(checkpoint["model_state"])
+        metadata = checkpoint.get("metadata") or {}
+        metrics = checkpoint.get("metrics") or {}
+        status = (
+            f"模型已加载 | checkpoint={checkpoint_file} | device={device} | "
+            f"epoch={checkpoint.get('epoch', 'n/a')} | vocab={len(answer_vocab)} | "
+            f"val_vqa={metrics.get('vqa_score', 'n/a')} | best={metadata.get('best_metric', 'n/a')}"
+        )
     except Exception as exc:
-        message = f"模型加载失败：{exc}"
+        message = (
+            f"模型加载失败：{exc}\n"
+            "请检查 checkpoint 路径、config 是否匹配，并确认 Hugging Face 模型文件已缓存或允许联网下载。"
+        )
 
         def failed_model_load(_image, _question, _topk):
             return message
 
-        return failed_model_load
+        return failed_model_load, message
 
     def run(image: Image.Image | None, question: str, topk: int):
         if image is None:
@@ -101,19 +111,20 @@ def build_predictor(config_path: str, checkpoint_path: str, device_override: str
         Path(temp_path).unlink(missing_ok=True)
         return "\n".join(f"{answer}\t{probability:.4f}" for answer, probability in results)
 
-    return run
+    return run, status
 
 
 def main() -> None:
     args = parse_args()
     if args.offline:
         os.environ["VQA_HF_LOCAL_ONLY"] = "1"
-    predictor = build_predictor(args.config, args.checkpoint, args.device)
+    predictor, status = build_predictor(args.config, args.checkpoint, args.device)
     server_port = find_available_port(args.server_port, args.server_name)
     if server_port != args.server_port:
         print(f"Port {args.server_port} is busy; using {server_port} instead.")
     with gr.Blocks(title="VQA Demo") as demo:
         gr.Markdown("# 基于多模态融合的视觉问答（VQA）")
+        gr.Textbox(label="Model Status", value=status, interactive=False, lines=2)
         with gr.Row():
             image = gr.Image(type="pil", label="Image")
             with gr.Column():
