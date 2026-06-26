@@ -39,6 +39,33 @@ def run(command, cwd=None):
     subprocess.run([str(part) for part in command], cwd=cwd, check=True)
 
 
+def load_kaggle_secrets():
+    try:
+        from kaggle_secrets import UserSecretsClient
+    except ImportError:
+        print("Kaggle Secrets client is not available; using existing environment variables.", flush=True)
+        return
+
+    client = UserSecretsClient()
+    loaded = []
+    for name in ("WANDB_API_KEY", "WANDB_ENTITY", "WANDB_PROJECT"):
+        if os.environ.get(name):
+            loaded.append(name)
+            continue
+        try:
+            value = client.get_secret(name)
+        except Exception as exc:
+            print(f"Kaggle Secret {name} is not configured: {exc}", flush=True)
+            continue
+        if value:
+            os.environ[name] = value
+            loaded.append(name)
+    if loaded:
+        print("Loaded Kaggle Secrets: " + ", ".join(sorted(set(loaded))), flush=True)
+    else:
+        print("No W&B Kaggle Secrets were loaded; training will run without W&B.", flush=True)
+
+
 def install_training_dependencies():
     run(
         [
@@ -200,6 +227,7 @@ def normalize_vqa_data():
 
 def main():
     run(["nvidia-smi"])
+    load_kaggle_secrets()
     WORK_ROOT.mkdir(parents=True, exist_ok=True)
     CHECKPOINT_DIR.mkdir(parents=True, exist_ok=True)
     data_root = normalize_vqa_data()
