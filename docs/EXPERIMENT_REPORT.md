@@ -103,6 +103,43 @@ Error analysis reports are diagnostic tools for finding recurring failure patter
 
 错误分析报告是发现重复错误模式的诊断工具，不能替代完整评估流程。
 
+## Kaggle Staged Fine-Tuning Run / Kaggle 分阶段微调运行
+
+The Kaggle API run `dongtingshuo/multimodal-vqa-finetune` completed successfully on June 26, 2026. The run used `configs/kaggle_finetune.yaml`, P100-compatible PyTorch wheels, VQA v2 question/annotation files, and the public Kaggle COCO image source `sagnikkayalcse52/coco2014vqa`. Because that public image source is missing a small number of COCO validation images, the kernel filtered VQA samples to those with available local images before training and evaluation.
+
+Kaggle API 任务 `dongtingshuo/multimodal-vqa-finetune` 已于 2026-06-26 成功完成。该运行使用 `configs/kaggle_finetune.yaml`、兼容 P100 的 PyTorch wheel、VQA v2 questions/annotations 文件，以及公开 Kaggle COCO 图片源 `sagnikkayalcse52/coco2014vqa`。由于该公开图片源缺少少量 COCO 验证图片，kernel 在训练和评估前过滤为本地实际存在图片的 VQA 样本。
+
+| Metric | Value |
+| --- | ---: |
+| Epochs | 12 |
+| Best epoch | 12 |
+| Train loss | 3.1768 |
+| Train hard accuracy | 0.6037 |
+| Train VQA score | 0.7064 |
+| Train Top-5 VQA score | 0.9074 |
+| Validation loss | 4.3283 |
+| Validation hard accuracy | 0.5239 |
+| Validation VQA score | 0.6233 |
+| Validation Top-5 VQA score | 0.8640 |
+| Evaluated validation examples | 209,410 |
+| Exported validation predictions | 214,124 |
+| Total runtime | 28,847 seconds |
+
+Local artifacts copied from Kaggle:
+
+Kaggle 结果已复制到本地：
+
+- `checkpoints/kaggle_finetune_best.pt`
+- `checkpoints/kaggle_finetune_latest.pt`
+- `checkpoints/kaggle_answer_vocab.json`
+- `checkpoints/kaggle_training_history.csv`
+- `checkpoints/kaggle_training_curves.png`
+- `checkpoints/kaggle_run_metadata.json`
+
+These are internal validation metrics from the project evaluator. They are useful for model selection but are not an official VQA leaderboard score.
+
+以上为项目内部 evaluator 的验证指标，可用于模型选择，但不是官方 VQA leaderboard 分数。
+
 ## Current Limitations / 当前限制
 
 - The answer space is a fixed Top-K vocabulary.

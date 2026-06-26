@@ -4,9 +4,9 @@ This document describes the trained checkpoint used by this repository.
 
 本文档描述本仓库配套使用的已训练模型权重。
 
-This card currently covers the published `v0.1.0` checkpoint. The staged fine-tuning configuration in the repository is a `v0.2` candidate protocol, not a published performance claim. A replacement checkpoint is promoted only after official VQA evaluation clears the documented release gate.
+This card currently covers the published `v0.1.0` checkpoint and the locally available Kaggle fine-tuning candidate. The Kaggle candidate has internal validation metrics, but it is not yet promoted as a release checkpoint until the official VQA evaluation and release gate are completed.
 
-本文档当前对应已发布的 `v0.1.0` 权重。仓库中的分阶段微调配置属于 `v0.2` 候选实验协议，并不代表已经发布的性能结论。替代权重只有在官方 VQA 评估通过文档规定的发布门槛后才会晋升。
+本文档当前覆盖已发布的 `v0.1.0` 权重和本地可用的 Kaggle 微调候选权重。Kaggle 候选权重已有内部验证指标，但在完成官方 VQA 评估和发布门槛前，尚未晋升为正式发布权重。
 
 ## Model Summary / 模型概要
 
@@ -81,6 +81,8 @@ data/
 
 ## Validation Metrics / 验证指标
 
+### Published v0.1.0 Checkpoint / 已发布 v0.1.0 权重
+
 Checkpoint metadata:
 
 权重内记录的验证结果：
@@ -98,6 +100,42 @@ val_acc: 0.477510
 This legacy checkpoint predates the runtime `vqa_score` and per-example BCE-loss normalization. Its stored loss must not be compared directly with loss values produced by the current training code. Re-evaluation with the current code reports `vqa_score`, `top5_vqa_score`, hard accuracy, and the revised loss scale.
 
 该历史权重生成于当前 `vqa_score` 和按样本归一化 BCE loss 实现之前，其中保存的 loss 不应与新版训练代码输出直接比较。使用当前代码重新评估会输出 `vqa_score`、`top5_vqa_score`、硬标签准确率和新 loss 尺度。
+
+### Kaggle Fine-Tuning Candidate / Kaggle 微调候选权重
+
+Local artifact:
+
+本地文件：
+
+```text
+checkpoints/kaggle_finetune_best.pt
+```
+
+Checkpoint size / 权重大小: `660,441,108` bytes
+
+SHA256:
+
+```text
+15e15b4a0194b073a153331ad2c6b38ee39400d87e489bb6f0fc77d91e7cb22c
+```
+
+Internal validation metrics from the completed Kaggle run:
+
+Kaggle 完整运行得到的内部验证指标：
+
+```text
+epoch: 12
+val_loss: 4.328347
+val_acc: 0.523929
+val_vqa_score: 0.623305
+val_top5_vqa_score: 0.863991
+evaluated_examples: 209410
+exported_predictions: 214124
+```
+
+This candidate was trained with VQA v2 labels and a public Kaggle COCO image source after filtering samples whose images were absent from that image source. The metrics above are project-internal validation metrics, not official VQA toolkit scores.
+
+该候选权重使用 VQA v2 标签和公开 Kaggle COCO 图片源训练，并过滤了该图片源中缺失图片的样本。上述指标是项目内部验证指标，不是官方 VQA toolkit 分数。
 
 ## Intended Use / 预期用途
 
@@ -154,6 +192,19 @@ python demo.py --config configs/default.yaml --checkpoint checkpoints/best.pt
 python infer.py \
   --config configs/default.yaml \
   --checkpoint checkpoints/best.pt \
+  --image data/vqa/val2014/COCO_val2014_000000000042.jpg \
+  --question "What is in the image?" \
+  --topk 5
+```
+
+For the Kaggle fine-tuned candidate:
+
+使用 Kaggle 微调候选权重：
+
+```bash
+python infer.py \
+  --config configs/default.yaml \
+  --checkpoint checkpoints/kaggle_finetune_best.pt \
   --image data/vqa/val2014/COCO_val2014_000000000042.jpg \
   --question "What is in the image?" \
   --topk 5
