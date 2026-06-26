@@ -3,7 +3,6 @@ import os
 import re
 import shutil
 import subprocess
-import time
 import urllib.request
 import zipfile
 from pathlib import Path
@@ -18,7 +17,6 @@ RAW_DATA_ROOT = Path(os.environ.get("RAW_DATA_ROOT", "/kaggle/input/coco2014vqa/
 TORCH_VERSION = os.environ.get("TORCH_VERSION", "2.4.1+cu121")
 TORCHVISION_VERSION = os.environ.get("TORCHVISION_VERSION", "0.19.1+cu121")
 PYTORCH_INDEX_URL = os.environ.get("PYTORCH_INDEX_URL", "https://download.pytorch.org/whl/cu121")
-REQUIRE_WANDB = os.environ.get("REQUIRE_WANDB", "1") != "0"
 
 CHECKPOINT_DIR = WORK_ROOT / RUN_NAME
 ANSWER_VOCAB = WORK_ROOT / "answer_vocab.json"
@@ -39,59 +37,6 @@ COCO_IMAGE_RE = re.compile(r"COCO_(?:train|val)2014_(\d{12})\.jpg$")
 def run(command, cwd=None):
     print("+", " ".join(str(part) for part in command), flush=True)
     subprocess.run([str(part) for part in command], cwd=cwd, check=True)
-
-
-def read_kaggle_secret(client, name, attempts=8, delay_seconds=3):
-    for attempt in range(1, attempts + 1):
-        try:
-            value = client.get_secret(name)
-        except Exception as exc:
-            if attempt == attempts:
-                print(f"Kaggle Secret {name} is not configured after {attempts} attempts: {exc}", flush=True)
-                return None
-            print(
-                f"Kaggle Secret {name} is not ready yet "
-                f"(attempt {attempt}/{attempts}): {exc}; retrying...",
-                flush=True,
-            )
-            time.sleep(delay_seconds)
-            continue
-        if value:
-            return value
-        if attempt < attempts:
-            print(f"Kaggle Secret {name} returned an empty value; retrying...", flush=True)
-            time.sleep(delay_seconds)
-    return None
-
-
-def load_kaggle_secrets():
-    try:
-        from kaggle_secrets import UserSecretsClient
-    except ImportError:
-        print("Kaggle Secrets client is not available; using existing environment variables.", flush=True)
-        return
-
-    client = UserSecretsClient()
-    loaded = []
-    for name in ("WANDB_API_KEY", "WANDB_ENTITY", "WANDB_PROJECT"):
-        if os.environ.get(name):
-            loaded.append(name)
-            continue
-        value = read_kaggle_secret(client, name)
-        if value:
-            os.environ[name] = value
-            loaded.append(name)
-    if loaded:
-        print("Loaded Kaggle Secrets: " + ", ".join(sorted(set(loaded))), flush=True)
-    else:
-        print("No W&B Kaggle Secrets were loaded; training will run without W&B.", flush=True)
-    if REQUIRE_WANDB and not os.environ.get("WANDB_API_KEY"):
-        raise RuntimeError(
-            "WANDB_API_KEY is required for this Kaggle run but was not available. "
-            "Add a Kaggle Secret named WANDB_API_KEY and make sure it is attached/enabled "
-            "for the multimodal-vqa-finetune notebook before starting the run. "
-            "Set REQUIRE_WANDB=0 only when intentionally running without W&B."
-        )
 
 
 def install_training_dependencies():
@@ -119,7 +64,6 @@ def install_training_dependencies():
             "PyYAML>=6.0",
             "tqdm>=4.66",
             "matplotlib>=3.8",
-            "wandb>=0.17",
         ],
         cwd=REPO_ROOT,
     )
@@ -255,7 +199,6 @@ def normalize_vqa_data():
 
 def main():
     run(["nvidia-smi"])
-    load_kaggle_secrets()
     WORK_ROOT.mkdir(parents=True, exist_ok=True)
     CHECKPOINT_DIR.mkdir(parents=True, exist_ok=True)
     data_root = normalize_vqa_data()
@@ -295,9 +238,6 @@ def main():
         "--epochs",
         TOTAL_EPOCHS,
     ]
-    if os.environ.get("WANDB_API_KEY"):
-        train_command.extend(["--wandb", "--wandb-tags", "kaggle", "strong-cross-attention"])
-
     latest_checkpoint = CHECKPOINT_DIR / "latest.pt"
     if latest_checkpoint.exists():
         train_command.extend(["--resume", latest_checkpoint])
