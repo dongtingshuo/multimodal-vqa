@@ -1,4 +1,6 @@
+import json
 import os
+import re
 import shutil
 import subprocess
 import urllib.request
@@ -29,6 +31,7 @@ VQA_DOWNLOADS = {
     "v2_OpenEnded_mscoco_val2014_questions.json": "https://s3.amazonaws.com/cvmlp/vqa/mscoco/vqa/v2_Questions_Val_mscoco.zip",
     "v2_mscoco_val2014_annotations.json": "https://s3.amazonaws.com/cvmlp/vqa/mscoco/vqa/v2_Annotations_Val_mscoco.zip",
 }
+COCO_IMAGE_RE = re.compile(r"COCO_(?:train|val)2014_(\d{12})\.jpg$")
 
 
 def run(command, cwd=None):
@@ -117,6 +120,45 @@ def link_path(source, target):
     target.symlink_to(source)
 
 
+def available_image_ids(image_dir):
+    image_ids = set()
+    for path in image_dir.glob("*.jpg"):
+        match = COCO_IMAGE_RE.match(path.name)
+        if match:
+            image_ids.add(int(match.group(1)))
+    if not image_ids:
+        raise FileNotFoundError(f"No COCO image files found in {image_dir}")
+    return image_ids
+
+
+def write_json(data, target):
+    if target.exists() or target.is_symlink():
+        target.unlink()
+    target.write_text(json.dumps(data), encoding="utf-8")
+
+
+def filter_vqa_split(split_name, image_dir, questions_source, annotations_source, questions_target, annotations_target):
+    image_ids = available_image_ids(image_dir)
+    questions = json.loads(questions_source.read_text(encoding="utf-8"))
+    annotations = json.loads(annotations_source.read_text(encoding="utf-8"))
+
+    original_questions = len(questions["questions"])
+    original_annotations = len(annotations["annotations"])
+    questions["questions"] = [item for item in questions["questions"] if int(item["image_id"]) in image_ids]
+    annotations["annotations"] = [item for item in annotations["annotations"] if int(item["image_id"]) in image_ids]
+
+    if not questions["questions"] or not annotations["annotations"]:
+        raise RuntimeError(f"{split_name} has no usable VQA samples after filtering missing images")
+
+    write_json(questions, questions_target)
+    write_json(annotations, annotations_target)
+    print(
+        f"{split_name}: kept {len(questions['questions'])}/{original_questions} questions and "
+        f"{len(annotations['annotations'])}/{original_annotations} annotations with available images",
+        flush=True,
+    )
+
+
 def normalize_vqa_data():
     input_root = Path("/kaggle/input")
     raw_root = first_existing(
@@ -129,22 +171,28 @@ def normalize_vqa_data():
         ]
     )
 
-    mapping = {
-        "train2014": find_dir(raw_root, "train2014"),
-        "val2014": find_dir(raw_root, "val2014"),
-        "v2_OpenEnded_mscoco_train2014_questions.json": download_vqa_file(
-            "v2_OpenEnded_mscoco_train2014_questions.json"
-        ),
-        "v2_mscoco_train2014_annotations.json": download_vqa_file("v2_mscoco_train2014_annotations.json"),
-        "v2_OpenEnded_mscoco_val2014_questions.json": download_vqa_file(
-            "v2_OpenEnded_mscoco_val2014_questions.json"
-        ),
-        "v2_mscoco_val2014_annotations.json": download_vqa_file("v2_mscoco_val2014_annotations.json"),
-    }
-
     NORMALIZED_DATA_ROOT.mkdir(parents=True, exist_ok=True)
-    for name, source in mapping.items():
-        link_path(source, NORMALIZED_DATA_ROOT / name)
+    train_images = find_dir(raw_root, "train2014")
+    val_images = find_dir(raw_root, "val2014")
+    link_path(train_images, NORMALIZED_DATA_ROOT / "train2014")
+    link_path(val_images, NORMALIZED_DATA_ROOT / "val2014")
+
+    filter_vqa_split(
+        "train",
+        train_images,
+        download_vqa_file("v2_OpenEnded_mscoco_train2014_questions.json"),
+        download_vqa_file("v2_mscoco_train2014_annotations.json"),
+        NORMALIZED_DATA_ROOT / "v2_OpenEnded_mscoco_train2014_questions.json",
+        NORMALIZED_DATA_ROOT / "v2_mscoco_train2014_annotations.json",
+    )
+    filter_vqa_split(
+        "val",
+        val_images,
+        download_vqa_file("v2_OpenEnded_mscoco_val2014_questions.json"),
+        download_vqa_file("v2_mscoco_val2014_annotations.json"),
+        NORMALIZED_DATA_ROOT / "v2_OpenEnded_mscoco_val2014_questions.json",
+        NORMALIZED_DATA_ROOT / "v2_mscoco_val2014_annotations.json",
+    )
     print(f"Normalized VQA data root: {NORMALIZED_DATA_ROOT}", flush=True)
     return NORMALIZED_DATA_ROOT
 
