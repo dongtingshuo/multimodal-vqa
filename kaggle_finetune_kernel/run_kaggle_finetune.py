@@ -17,6 +17,7 @@ RAW_DATA_ROOT = Path(os.environ.get("RAW_DATA_ROOT", "/kaggle/input/coco2014vqa/
 TORCH_VERSION = os.environ.get("TORCH_VERSION", "2.4.1+cu121")
 TORCHVISION_VERSION = os.environ.get("TORCHVISION_VERSION", "0.19.1+cu121")
 PYTORCH_INDEX_URL = os.environ.get("PYTORCH_INDEX_URL", "https://download.pytorch.org/whl/cu121")
+REQUIRE_WANDB = os.environ.get("REQUIRE_WANDB", "1") != "0"
 
 CHECKPOINT_DIR = WORK_ROOT / RUN_NAME
 ANSWER_VOCAB = WORK_ROOT / "answer_vocab.json"
@@ -64,6 +65,13 @@ def load_kaggle_secrets():
         print("Loaded Kaggle Secrets: " + ", ".join(sorted(set(loaded))), flush=True)
     else:
         print("No W&B Kaggle Secrets were loaded; training will run without W&B.", flush=True)
+    if REQUIRE_WANDB and not os.environ.get("WANDB_API_KEY"):
+        raise RuntimeError(
+            "WANDB_API_KEY is required for this Kaggle run but was not available. "
+            "Add a Kaggle Secret named WANDB_API_KEY and make sure it is attached/enabled "
+            "for the multimodal-vqa-finetune notebook before starting the run. "
+            "Set REQUIRE_WANDB=0 only when intentionally running without W&B."
+        )
 
 
 def install_training_dependencies():
