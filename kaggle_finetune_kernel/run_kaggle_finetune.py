@@ -12,6 +12,9 @@ CONFIG_PATH = os.environ.get("CONFIG_PATH", "configs/kaggle_finetune.yaml")
 GIT_REF = os.environ.get("GIT_REF", "e26ba28")
 TOTAL_EPOCHS = os.environ.get("TOTAL_EPOCHS", "12")
 RAW_DATA_ROOT = Path(os.environ.get("RAW_DATA_ROOT", "/kaggle/input/coco2014vqa/Dataset"))
+TORCH_VERSION = os.environ.get("TORCH_VERSION", "2.4.1+cu121")
+TORCHVISION_VERSION = os.environ.get("TORCHVISION_VERSION", "0.19.1+cu121")
+PYTORCH_INDEX_URL = os.environ.get("PYTORCH_INDEX_URL", "https://download.pytorch.org/whl/cu121")
 
 CHECKPOINT_DIR = WORK_ROOT / RUN_NAME
 ANSWER_VOCAB = WORK_ROOT / "answer_vocab.json"
@@ -31,6 +34,36 @@ VQA_DOWNLOADS = {
 def run(command, cwd=None):
     print("+", " ".join(str(part) for part in command), flush=True)
     subprocess.run([str(part) for part in command], cwd=cwd, check=True)
+
+
+def install_training_dependencies():
+    run(
+        [
+            "python",
+            "-m",
+            "pip",
+            "install",
+            "--index-url",
+            PYTORCH_INDEX_URL,
+            f"torch=={TORCH_VERSION}",
+            f"torchvision=={TORCHVISION_VERSION}",
+        ],
+        cwd=REPO_ROOT,
+    )
+    run(
+        [
+            "python",
+            "-m",
+            "pip",
+            "install",
+            "transformers>=4.40",
+            "Pillow>=10.0",
+            "PyYAML>=6.0",
+            "tqdm>=4.66",
+            "matplotlib>=3.8",
+        ],
+        cwd=REPO_ROOT,
+    )
 
 
 def first_existing(candidates):
@@ -127,7 +160,7 @@ def main():
 
     run(["git", "fetch", "--all", "--tags"], cwd=REPO_ROOT)
     run(["git", "checkout", GIT_REF], cwd=REPO_ROOT)
-    run(["python", "-m", "pip", "install", "-r", "requirements.txt"], cwd=REPO_ROOT)
+    install_training_dependencies()
 
     run(
         [
