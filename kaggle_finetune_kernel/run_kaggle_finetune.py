@@ -14,6 +14,9 @@ CONFIG_PATH = os.environ.get("CONFIG_PATH", "configs/kaggle_strong.yaml")
 GIT_REF = os.environ.get("GIT_REF", "main")
 TOTAL_EPOCHS = os.environ.get("TOTAL_EPOCHS", "24")
 RAW_DATA_ROOT = Path(os.environ.get("RAW_DATA_ROOT", "/kaggle/input/coco2014vqa/Dataset"))
+RESUME_ROOT = Path(
+    os.environ.get("RESUME_ROOT", "/kaggle/input/multimodal-vqa-resume-checkpoint")
+)
 TORCH_VERSION = os.environ.get("TORCH_VERSION", "2.4.1+cu121")
 TORCHVISION_VERSION = os.environ.get("TORCHVISION_VERSION", "0.19.1+cu121")
 PYTORCH_INDEX_URL = os.environ.get("PYTORCH_INDEX_URL", "https://download.pytorch.org/whl/cu121")
@@ -24,6 +27,13 @@ PREDICTIONS_PATH = CHECKPOINT_DIR / "val_predictions.json"
 ARCHIVE_PATH = Path("/kaggle/working/multimodal-vqa-finetune-artifacts")
 NORMALIZED_DATA_ROOT = Path(os.environ.get("DATA_ROOT", WORK_ROOT / "vqa"))
 DOWNLOAD_ROOT = WORK_ROOT / "downloads"
+RESUME_FILES = (
+    "latest.pt",
+    "best.pt",
+    "training_history.csv",
+    "training_curves.png",
+    "run_metadata.json",
+)
 
 VQA_DOWNLOADS = {
     "v2_OpenEnded_mscoco_train2014_questions.json": "https://s3.amazonaws.com/cvmlp/vqa/mscoco/vqa/v2_Questions_Train_mscoco.zip",
@@ -120,6 +130,34 @@ def link_path(source, target):
     target.symlink_to(source)
 
 
+def restore_resume_artifacts():
+    latest_checkpoint = CHECKPOINT_DIR / "latest.pt"
+    if latest_checkpoint.exists():
+        print(f"Using checkpoint already present at {latest_checkpoint}", flush=True)
+        return latest_checkpoint
+
+    if not RESUME_ROOT.is_dir():
+        print(f"No resume dataset found at {RESUME_ROOT}; starting a new run", flush=True)
+        return None
+
+    source_latest = find_file(RESUME_ROOT, "latest.pt")
+    for filename in RESUME_FILES:
+        try:
+            source = find_file(RESUME_ROOT, filename)
+        except FileNotFoundError:
+            continue
+        shutil.copy2(source, CHECKPOINT_DIR / filename)
+
+    try:
+        shutil.copy2(find_file(RESUME_ROOT, "answer_vocab.json"), ANSWER_VOCAB)
+    except FileNotFoundError:
+        pass
+
+    restored_latest = CHECKPOINT_DIR / source_latest.name
+    print(f"Restored resume checkpoint from {source_latest} to {restored_latest}", flush=True)
+    return restored_latest
+
+
 def available_image_ids(image_dir):
     image_ids = set()
     for path in image_dir.glob("*.jpg"):
@@ -201,6 +239,7 @@ def main():
     run(["nvidia-smi"])
     WORK_ROOT.mkdir(parents=True, exist_ok=True)
     CHECKPOINT_DIR.mkdir(parents=True, exist_ok=True)
+    latest_checkpoint = restore_resume_artifacts()
     data_root = normalize_vqa_data()
 
     if not REPO_ROOT.exists():
@@ -238,8 +277,7 @@ def main():
         "--epochs",
         TOTAL_EPOCHS,
     ]
-    latest_checkpoint = CHECKPOINT_DIR / "latest.pt"
-    if latest_checkpoint.exists():
+    if latest_checkpoint is not None:
         train_command.extend(["--resume", latest_checkpoint])
 
     run(train_command, cwd=REPO_ROOT)

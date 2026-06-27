@@ -70,6 +70,18 @@ For W&B, create Kaggle Secrets named `WANDB_API_KEY` and optionally `WANDB_ENTIT
 
 `latest.pt` 在每个 epoch 结束后原子写入。将上一版 Notebook 输出重新挂载为 Input，或在同一保存会话中执行：
 
+The maintained Kaggle script also supports a private checkpoint Dataset mounted at
+`/kaggle/input/multimodal-vqa-resume-checkpoint`. When present, it copies `latest.pt`,
+`best.pt`, the answer vocabulary, and run history into `/kaggle/working` before training,
+then resumes automatically. Kaggle checkpoints are saved at epoch boundaries, so an
+interrupted partial epoch is repeated.
+
+仓库内维护的 Kaggle 脚本还支持挂载到
+`/kaggle/input/multimodal-vqa-resume-checkpoint` 的私有 checkpoint Dataset。如果存在，
+脚本会在训练前将 `latest.pt`、`best.pt`、答案词表和训练历史复制到
+`/kaggle/working`，并自动续训。Kaggle checkpoint 按 epoch 边界保存，因此中断时
+未完成的 epoch 会重新训练。
+
 ```bash
 python train.py \
   --config configs/kaggle_finetune.yaml \
