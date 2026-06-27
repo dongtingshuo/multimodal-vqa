@@ -171,3 +171,44 @@ def test_restore_training_checkpoint_restores_state(tmp_path) -> None:
     restored = restore_training_checkpoint(checkpoint, model, optimizer, None, None, generator)
     assert restored["best_metric"] == 0.4
     assert restored["global_step"] == 7
+
+
+def test_restore_training_checkpoint_moves_rng_states_to_cpu(tmp_path, monkeypatch) -> None:
+    class DeviceMappedState:
+        def __init__(self, state: torch.Tensor) -> None:
+            self.state = state
+            self.cpu_called = False
+
+        def cpu(self) -> torch.Tensor:
+            self.cpu_called = True
+            return self.state
+
+    model = TinyVQAModel()
+    optimizer = torch.optim.AdamW(model.parameters(), lr=0.01)
+    generator = torch.Generator().manual_seed(123)
+    path = tmp_path / "latest.pt"
+    save_checkpoint(
+        path,
+        model,
+        optimizer,
+        epoch=2,
+        metrics={"vqa_score": 0.4},
+        config={"model": {"name": "test"}},
+        answer_vocab=AnswerVocab(["yes", "no"]),
+        data_generator=generator,
+    )
+    checkpoint = load_checkpoint(path, torch.device("cpu"))
+    torch_state = DeviceMappedState(checkpoint["rng_state"]["torch"])
+    cuda_state = DeviceMappedState(checkpoint["rng_state"]["torch"])
+    generator_state = DeviceMappedState(checkpoint["rng_state"]["data_generator"])
+    checkpoint["rng_state"]["torch"] = torch_state
+    checkpoint["rng_state"]["cuda"] = [cuda_state]
+    checkpoint["rng_state"]["data_generator"] = generator_state
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: True)
+    monkeypatch.setattr(torch.cuda, "set_rng_state_all", lambda states: None)
+
+    restore_training_checkpoint(checkpoint, model, optimizer, None, None, generator)
+
+    assert torch_state.cpu_called
+    assert cuda_state.cpu_called
+    assert generator_state.cpu_called

@@ -250,11 +250,11 @@ def restore_training_checkpoint(
     if rng_state.get("python") is not None:
         random.setstate(rng_state["python"])
     if rng_state.get("torch") is not None:
-        torch.set_rng_state(rng_state["torch"])
+        torch.set_rng_state(rng_state["torch"].cpu())
     if torch.cuda.is_available() and rng_state.get("cuda") is not None:
-        torch.cuda.set_rng_state_all(rng_state["cuda"])
+        torch.cuda.set_rng_state_all([state.cpu() for state in rng_state["cuda"]])
     if data_generator is not None and rng_state.get("data_generator") is not None:
-        data_generator.set_state(rng_state["data_generator"])
+        data_generator.set_state(rng_state["data_generator"].cpu())
     return dict(checkpoint.get("training_state") or {})
 
 
