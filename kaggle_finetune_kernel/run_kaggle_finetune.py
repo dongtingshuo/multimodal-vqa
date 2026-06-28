@@ -30,9 +30,11 @@ DOWNLOAD_ROOT = WORK_ROOT / "downloads"
 RESUME_FILES = (
     "latest.pt",
     "best.pt",
+    "config.snapshot.json",
     "training_history.csv",
     "training_curves.png",
     "run_metadata.json",
+    "run_summary.json",
 )
 
 VQA_DOWNLOADS = {
@@ -158,6 +160,17 @@ def restore_resume_artifacts():
     return restored_latest
 
 
+def completed_training_epochs():
+    summary_path = CHECKPOINT_DIR / "run_summary.json"
+    if not summary_path.is_file():
+        return 0
+    try:
+        summary = json.loads(summary_path.read_text(encoding="utf-8"))
+        return int(summary.get("total_epochs", 0))
+    except (OSError, TypeError, ValueError, json.JSONDecodeError):
+        return 0
+
+
 def available_image_ids(image_dir):
     image_ids = set()
     for path in image_dir.glob("*.jpg"):
@@ -280,7 +293,14 @@ def main():
     if latest_checkpoint is not None:
         train_command.extend(["--resume", latest_checkpoint])
 
-    run(train_command, cwd=REPO_ROOT)
+    completed_epochs = completed_training_epochs()
+    if latest_checkpoint is not None and completed_epochs >= int(TOTAL_EPOCHS):
+        print(
+            f"Training already completed {completed_epochs}/{TOTAL_EPOCHS} epochs; skipping to evaluation",
+            flush=True,
+        )
+    else:
+        run(train_command, cwd=REPO_ROOT)
 
     run(
         [
