@@ -137,6 +137,40 @@ This candidate was trained with VQA v2 labels and a public Kaggle COCO image sou
 
 该候选权重使用 VQA v2 标签和公开 Kaggle COCO 图片源训练，并过滤了该图片源中缺失图片的样本。上述指标是项目内部验证指标，不是官方 VQA toolkit 分数。
 
+### Strong Cross-Attention Ablation / 强化交叉注意力消融实验
+
+The completed 24-epoch strong-model checkpoint is retained at:
+
+24 epoch 强化模型实验权重保留于：
+
+```text
+checkpoints/kaggle_strong_best.pt
+```
+
+Checkpoint size / 权重大小: `811,846,462` bytes
+
+SHA256:
+
+```text
+07d8bfb2c4de7e1f19a16c70b48b8043a78959498e8407d6f48486482f84aa7e
+```
+
+```text
+epoch: 22
+val_loss: 34.009508
+val_acc: 0.496743
+val_vqa_score: 0.595518
+val_top5_vqa_score: 0.827068
+evaluated_examples: 209410
+exported_predictions: 214124
+```
+
+This ablation underperformed the staged fine-tuning candidate and is therefore not the
+recommended checkpoint. It remains available for reproducibility and architecture comparison.
+
+该消融实验的表现低于分阶段微调候选模型，因此不作为推荐 checkpoint，
+仅用于可复现性与模型架构对比。
+
 ## Intended Use / 预期用途
 
 This model is intended for:

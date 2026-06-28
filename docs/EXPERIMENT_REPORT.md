@@ -140,6 +140,48 @@ These are internal validation metrics from the project evaluator. They are usefu
 
 以上为项目内部 evaluator 的验证指标，可用于模型选择，但不是官方 VQA leaderboard 分数。
 
+## Kaggle Strong Cross-Attention Run / Kaggle 强化交叉注意力运行
+
+The 24-epoch `strong_cross_attention` experiment completed on June 28, 2026 using
+`configs/kaggle_strong.yaml`. Training resumed from epoch-boundary checkpoints across
+Kaggle sessions. A separate evaluation-only run exported predictions for all validation
+questions and completed the artifact archive.
+
+24 epoch 的 `strong_cross_attention` 实验于 2026-06-28 完成，使用
+`configs/kaggle_strong.yaml`。训练通过 epoch 边界 checkpoint 在多个 Kaggle 会话间续训，
+并通过独立评估任务导出全部验证问题的预测与完整归档。
+
+| Metric | Value |
+| --- | ---: |
+| Epochs | 24 |
+| Best epoch | 22 |
+| Train loss | 170.7379 |
+| Train hard accuracy | 0.6868 |
+| Train VQA score | 0.7801 |
+| Train Top-5 VQA score | 0.8690 |
+| Validation loss | 34.0095 |
+| Validation hard accuracy | 0.4967 |
+| Validation VQA score | 0.5955 |
+| Validation Top-5 VQA score | 0.8271 |
+| Evaluated validation examples | 209,410 |
+| Exported validation predictions | 214,124 |
+| Total training runtime | 83,741 seconds |
+
+Local artifacts / 本地产物：
+
+- `checkpoints/kaggle_strong_best.pt`
+- `outputs/kaggle_strong_final/run_summary.json`
+- `outputs/kaggle_strong_final/training_history.csv`
+- `outputs/kaggle_strong_final/training_curves.png`
+- `outputs/kaggle_strong_final/val_predictions.json`
+
+This experiment did not exceed the staged fine-tuning candidate (`0.5239` hard accuracy,
+`0.6233` VQA score), so it is retained as an ablation result and is not promoted as the
+recommended checkpoint.
+
+该实验未超过分阶段微调候选模型（硬准确率 `0.5239`、VQA score `0.6233`），
+因此作为消融实验结果保留，不晋升为推荐 checkpoint。
+
 ## Current Limitations / 当前限制
 
 - The answer space is a fixed Top-K vocabulary.
