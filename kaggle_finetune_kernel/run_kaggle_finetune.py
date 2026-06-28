@@ -21,6 +21,9 @@ RESUME_ROOT = Path(
 TORCH_VERSION = os.environ.get("TORCH_VERSION", "2.4.1+cu121")
 TORCHVISION_VERSION = os.environ.get("TORCHVISION_VERSION", "0.19.1+cu121")
 PYTORCH_INDEX_URL = os.environ.get("PYTORCH_INDEX_URL", "https://download.pytorch.org/whl/cu121")
+COCO_IMAGE_BASE_URL = os.environ.get(
+    "COCO_IMAGE_BASE_URL", "https://s3.amazonaws.com/images.cocodataset.org"
+)
 
 CHECKPOINT_DIR = WORK_ROOT / RUN_NAME
 ANSWER_VOCAB = WORK_ROOT / "answer_vocab.json"
@@ -209,7 +212,7 @@ def prepare_val_images(source_dir, target_dir, questions_path):
     for index, (_, filename) in enumerate(missing, start=1):
         target = target_dir / filename
         temporary = target.with_suffix(".jpg.part")
-        url = f"https://images.cocodataset.org/val2014/{filename}"
+        url = f"{COCO_IMAGE_BASE_URL}/val2014/{filename}"
         for attempt in range(1, 4):
             try:
                 urllib.request.urlretrieve(url, temporary)
