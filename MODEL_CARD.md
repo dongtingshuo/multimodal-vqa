@@ -8,6 +8,23 @@ This card currently covers the published `v0.1.0` checkpoint and the locally ava
 
 本文档当前覆盖已发布的 `v0.1.0` 权重和本地可用的 Kaggle 微调候选权重。Kaggle 候选权重已有内部验证指标，但在完成官方 VQA 评估和发布门槛前，尚未晋升为正式发布权重。
 
+The repository also contains an experimental ViLT training route. It is not listed as a trained model result until its Kaggle run, complete prediction export, and official evaluation finish.
+
+仓库同时提供实验性 ViLT 训练路线。在 Kaggle 训练、完整预测导出和官方评估完成前，不将其列为已训练模型结果。
+
+## Active Candidate Protocol / 当前候选协议
+
+- **Architecture / 架构**: generic image-text pretrained `dandelin/vilt-b32-mlm-itm` plus a new Top-3000 VQA classifier
+- **Config / 配置**: `configs/kaggle_vilt.yaml`
+- **Data gate / 数据门槛**: 443,757 train questions and 214,354 validation questions; missing mirror images are repaired, not filtered
+- **Internal targets / 内部目标**: hard accuracy `>= 0.55`, VQA score `>= 0.65`
+- **Tracking / 追踪**: required online W&B metrics; model files remain in Kaggle artifacts
+- **Promotion / 晋升**: retain `checkpoints/kaggle_finetune_best.pt` until both internal gates and official evaluation are verified
+
+The source checkpoint is intentionally not VQAv2-fine-tuned. This keeps comparison claims separate from task-specific checkpoint transfer.
+
+源 checkpoint 明确不使用 VQAv2 微调权重，以避免将任务特定 checkpoint 迁移误写成当前工程训练策略带来的提升。
+
 ## Model Summary / 模型概要
 
 - **Task / 任务**: Visual Question Answering (VQA)

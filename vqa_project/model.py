@@ -6,7 +6,7 @@ import torch
 from torch import nn
 from torchvision.models import ResNet50_Weights, resnet50
 
-from .hf import load_text_model
+from .hf import load_text_model, load_vilt_model
 
 
 class ImageEncoder(nn.Module):
@@ -49,6 +49,38 @@ class TinyTextModel(nn.Module):
     def forward(self, input_ids: torch.Tensor, attention_mask: torch.Tensor | None = None):
         token_ids = input_ids.clamp_min(0).remainder(self.embedding.num_embeddings)
         return SimpleNamespace(last_hidden_state=self.norm(self.embedding(token_ids)))
+
+
+class TinyViltModel(nn.Module):
+    def __init__(self, hidden_size: int = 32, vocab_size: int = 4096) -> None:
+        super().__init__()
+        self.config = SimpleNamespace(hidden_size=hidden_size)
+        self.image_projection = nn.Linear(3, hidden_size)
+        self.text_embedding = nn.Embedding(vocab_size, hidden_size)
+        self.encoder = nn.Module()
+        self.encoder.layer = nn.ModuleList([nn.Linear(hidden_size, hidden_size) for _ in range(2)])
+        self.norm = nn.LayerNorm(hidden_size)
+
+    def forward(
+        self,
+        input_ids: torch.Tensor,
+        pixel_values: torch.Tensor,
+        attention_mask: torch.Tensor | None = None,
+        pixel_mask: torch.Tensor | None = None,
+        token_type_ids: torch.Tensor | None = None,
+    ):
+        _ = pixel_mask, token_type_ids
+        image_features = self.image_projection(pixel_values.mean(dim=(-1, -2)))
+        text_tokens = self.text_embedding(input_ids.remainder(self.text_embedding.num_embeddings))
+        if attention_mask is None:
+            text_features = text_tokens.mean(dim=1)
+        else:
+            text_features = _masked_mean(text_tokens, attention_mask)
+        pooled = self.norm(image_features + text_features)
+        return SimpleNamespace(pooler_output=pooled, last_hidden_state=pooled.unsqueeze(1))
+
+    def gradient_checkpointing_enable(self) -> None:
+        return None
 
 
 def _build_image_encoder(pretrained_cnn: bool, mock_backbones: bool, mock_hidden_size: int) -> nn.Module:
@@ -232,7 +264,9 @@ class VQAModel(nn.Module):
         stage: str,
         image_blocks: int = 1,
         text_layers: int = 2,
+        vilt_layers: int | None = None,
     ) -> None:
+        _ = vilt_layers
         if stage not in {"frozen", "partial", "full"}:
             raise ValueError(f"Unsupported fine-tune stage: {stage}")
 
@@ -337,6 +371,110 @@ class StrongCrossAttentionVQAModel(VQAModel):
         )
         if freeze_backbones:
             self.freeze_backbones()
+
+
+class ViltVQAModel(nn.Module):
+    def __init__(
+        self,
+        answer_vocab_size: int,
+        pretrained_model_name: str = "dandelin/vilt-b32-mlm-itm",
+        dropout: float = 0.1,
+        freeze_backbones: bool = False,
+        gradient_checkpointing: bool = True,
+        trainable_layers: int = 12,
+        mock_backbones: bool = False,
+        mock_hidden_size: int = 32,
+        text_model_name: str | None = None,
+        hidden_dim: int | None = None,
+        num_attention_heads: int | None = None,
+        pretrained_cnn: bool | None = None,
+    ) -> None:
+        super().__init__()
+        _ = text_model_name, hidden_dim, num_attention_heads, pretrained_cnn
+        self.backbone = (
+            TinyViltModel(hidden_size=mock_hidden_size)
+            if mock_backbones
+            else load_vilt_model(pretrained_model_name)
+        )
+        self.pretrained_model_name = pretrained_model_name
+        self.default_trainable_layers = max(int(trainable_layers), 1)
+        hidden_size = int(self.backbone.config.hidden_size)
+        self.classifier = nn.Sequential(
+            nn.LayerNorm(hidden_size),
+            nn.Linear(hidden_size, hidden_size * 2),
+            nn.GELU(),
+            nn.Dropout(dropout),
+            nn.Linear(hidden_size * 2, answer_vocab_size),
+        )
+        self.finetune_stage = "full"
+        self._trainable_backbone_modules: list[nn.Module] = []
+        if gradient_checkpointing and not mock_backbones:
+            self.backbone.gradient_checkpointing_enable()
+        if freeze_backbones:
+            self.freeze_backbones()
+
+    def freeze_backbones(self) -> None:
+        _set_requires_grad(self.backbone, False)
+        self.finetune_stage = "frozen"
+        self._trainable_backbone_modules = []
+
+    def set_finetune_stage(
+        self,
+        stage: str,
+        image_blocks: int = 1,
+        text_layers: int = 2,
+        vilt_layers: int | None = None,
+    ) -> None:
+        _ = image_blocks, text_layers
+        if stage not in {"frozen", "partial", "full"}:
+            raise ValueError(f"Unsupported fine-tune stage: {stage}")
+        _set_requires_grad(self.backbone, False)
+        self._trainable_backbone_modules = []
+        if stage == "partial":
+            layers = list(getattr(getattr(self.backbone, "encoder", None), "layer", []))
+            count = max(1, min(int(vilt_layers or self.default_trainable_layers), len(layers)))
+            self._trainable_backbone_modules = layers[-count:]
+            for module in self._trainable_backbone_modules:
+                _set_requires_grad(module, True)
+        elif stage == "full":
+            _set_requires_grad(self.backbone, True)
+        self.finetune_stage = stage
+        if self.training:
+            self._apply_backbone_train_mode()
+
+    def _apply_backbone_train_mode(self) -> None:
+        if self.finetune_stage == "full":
+            self.backbone.train()
+            return
+        self.backbone.eval()
+        for module in self._trainable_backbone_modules:
+            module.train()
+
+    def train(self, mode: bool = True):
+        super().train(mode)
+        if mode:
+            self._apply_backbone_train_mode()
+        return self
+
+    def forward(
+        self,
+        images: torch.Tensor,
+        input_ids: torch.Tensor,
+        attention_mask: torch.Tensor,
+        pixel_mask: torch.Tensor | None = None,
+        token_type_ids: torch.Tensor | None = None,
+    ) -> torch.Tensor:
+        outputs = self.backbone(
+            input_ids=input_ids,
+            pixel_values=images,
+            attention_mask=attention_mask,
+            pixel_mask=pixel_mask,
+            token_type_ids=token_type_ids,
+        )
+        pooled = outputs.pooler_output
+        if pooled is None:
+            pooled = outputs.last_hidden_state[:, 0]
+        return self.classifier(pooled)
 
 
 class BaselineConcatVQAModel(nn.Module):
@@ -501,6 +639,7 @@ MODEL_REGISTRY = {
     "baseline_concat": BaselineConcatVQAModel,
     "text_only": TextOnlyVQAModel,
     "image_only": ImageOnlyVQAModel,
+    "vilt": ViltVQAModel,
 }
 
 

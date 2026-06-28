@@ -16,8 +16,8 @@ from PIL import Image
 from vqa_project.answers import AnswerVocab
 from vqa_project.config import apply_runtime_overrides, load_config, resolve_checkpoint_config, resolve_device
 from vqa_project.engine import load_checkpoint
-from vqa_project.hf import load_tokenizer
 from vqa_project.inference import predict
+from vqa_project.inputs import build_input_pipeline
 from vqa_project.model import build_model
 
 
@@ -68,7 +68,7 @@ def build_predictor(config_path: str, checkpoint_path: str, device_override: str
         answer_vocab = AnswerVocab(
             checkpoint.get("idx_to_answer") or AnswerVocab.load(data_cfg["answer_vocab_path"]).idx_to_answer
         )
-        tokenizer = load_tokenizer(model_cfg["text_model_name"])
+        input_pipeline = build_input_pipeline(model_cfg, data_cfg)
         model = build_model(model_cfg, answer_vocab_size=len(answer_vocab)).to(device)
         model.load_state_dict(checkpoint["model_state"])
         metadata = checkpoint.get("metadata") or {}
@@ -99,7 +99,7 @@ def build_predictor(config_path: str, checkpoint_path: str, device_override: str
             temp_path = tmp.name
         results = predict(
             model=model,
-            tokenizer=tokenizer,
+            input_pipeline=input_pipeline,
             answer_vocab=answer_vocab,
             image_path=temp_path,
             question=question,

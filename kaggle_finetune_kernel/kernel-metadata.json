@@ -8,8 +8,7 @@
   "enable_gpu": "true",
   "enable_internet": "true",
   "dataset_sources": [
-    "sagnikkayalcse52/coco2014vqa",
-    "dongtingshuo/multimodal-vqa-resume-checkpoint"
+    "sagnikkayalcse52/coco2014vqa"
   ],
   "competition_sources": [],
   "kernel_sources": []

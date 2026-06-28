@@ -1,8 +1,8 @@
 # Kaggle Training / Kaggle 训练
 
-This workflow uses one training engine for local CPU, local CUDA, Apple MPS, and Kaggle CUDA. Kaggle-specific behavior is limited to input/output paths, resumable checkpoints, and the staged fine-tuning config.
+This workflow uses one training engine for local CPU, local CUDA, Apple MPS, and Kaggle CUDA. The recommended full experiment uses ViLT on Kaggle with strict data validation, epoch-boundary resume, online W&B tracking, prediction export, and official VQA evaluation.
 
-本流程在本地 CPU、本地 CUDA、Apple MPS 和 Kaggle CUDA 之间共用同一训练引擎。Kaggle 专用部分仅包括输入输出路径、断点权重和分阶段微调配置。
+本流程在本地 CPU、本地 CUDA、Apple MPS 和 Kaggle CUDA 之间共用同一训练引擎。推荐的全量实验在 Kaggle 上训练 ViLT，并执行严格数据校验、epoch 边界续训、W&B 在线监控、预测导出和官方 VQA 评估。
 
 ## Required Dataset Layout / 数据集目录
 
@@ -27,7 +27,8 @@ Validate the mounted input before enabling the GPU run:
 ```bash
 python scripts/validate_vqa_data.py \
   --root /kaggle/input/<dataset>/vqa \
-  --sample-images 20
+  --sample-images 20 \
+  --strict-full
 ```
 
 ## Runtime Selection / 运行方式
@@ -50,19 +51,19 @@ python train.py \
   --answer-vocab-path /kaggle/working/answer_vocab.json \
   --checkpoint-dir /kaggle/working/multimodal-vqa/finetune
 
-# Kaggle stronger candidate with optional W&B tracking
+# Recommended Kaggle ViLT experiment with required online W&B tracking
 python train.py \
-  --config configs/kaggle_strong.yaml \
+  --config configs/kaggle_vilt.yaml \
   --device cuda \
   --data-root /kaggle/input/<dataset>/vqa \
   --answer-vocab-path /kaggle/working/answer_vocab.json \
-  --checkpoint-dir /kaggle/working/multimodal-vqa/strong \
+  --checkpoint-dir /kaggle/working/multimodal-vqa/vilt \
   --wandb
 ```
 
-For W&B, create Kaggle Secrets named `WANDB_API_KEY` and optionally `WANDB_ENTITY`. The key is read from the environment and must not be committed to the repository.
+Create a Kaggle Secret named `WANDB_API_KEY` and enable it for the notebook. `configs/kaggle_vilt.yaml` marks W&B as required: training stops before the first epoch if the secret cannot be read or verified. A successful launch prints `W&B run: <URL>`; that URL opens the live loss, accuracy, VQA score, learning-rate, stage, and timing charts. `WANDB_ENTITY` is optional. Checkpoints are not uploaded to W&B.
 
-如需使用 W&B，请在 Kaggle Secrets 中创建 `WANDB_API_KEY`，可选创建 `WANDB_ENTITY`。密钥只从环境变量读取，不应提交到仓库。
+请在 Kaggle Secrets 中创建 `WANDB_API_KEY` 并为当前 notebook 启用。`configs/kaggle_vilt.yaml` 将 W&B 设为必需：如果密钥无法读取或在线验证，训练会在第一个 epoch 前停止。成功启动后日志会输出 `W&B run: <URL>`，打开该链接即可在线查看 loss、accuracy、VQA score、各参数组学习率、训练阶段和耗时。`WANDB_ENTITY` 可选，checkpoint 默认不上传 W&B。
 
 ## Resume / 断点续训
 
@@ -71,25 +72,26 @@ For W&B, create Kaggle Secrets named `WANDB_API_KEY` and optionally `WANDB_ENTIT
 `latest.pt` 在每个 epoch 结束后原子写入。将上一版 Notebook 输出重新挂载为 Input，或在同一保存会话中执行：
 
 The maintained Kaggle script also supports a private checkpoint Dataset mounted at
-`/kaggle/input/multimodal-vqa-resume-checkpoint`. When present, it copies `latest.pt`,
+`/kaggle/input/multimodal-vqa-vilt-resume`. When present, it copies `latest.pt`,
 `best.pt`, the answer vocabulary, and run history into `/kaggle/working` before training,
 then resumes automatically. Kaggle checkpoints are saved at epoch boundaries, so an
 interrupted partial epoch is repeated.
 
 仓库内维护的 Kaggle 脚本还支持挂载到
-`/kaggle/input/multimodal-vqa-resume-checkpoint` 的私有 checkpoint Dataset。如果存在，
+`/kaggle/input/multimodal-vqa-vilt-resume` 的私有 checkpoint Dataset。如果存在，
 脚本会在训练前将 `latest.pt`、`best.pt`、答案词表和训练历史复制到
 `/kaggle/working`，并自动续训。Kaggle checkpoint 按 epoch 边界保存，因此中断时
 未完成的 epoch 会重新训练。
 
 ```bash
 python train.py \
-  --config configs/kaggle_finetune.yaml \
+  --config configs/kaggle_vilt.yaml \
   --device cuda \
   --data-root /kaggle/input/<dataset>/vqa \
   --answer-vocab-path /kaggle/working/answer_vocab.json \
-  --checkpoint-dir /kaggle/working/multimodal-vqa/finetune \
-  --resume /kaggle/working/multimodal-vqa/finetune/latest.pt
+  --checkpoint-dir /kaggle/working/multimodal-vqa/vilt \
+  --resume /kaggle/working/multimodal-vqa/vilt/latest.pt \
+  --wandb
 ```
 
 Resume permits different local paths, device, workers, logging location, and a larger total epoch count. Model, preprocessing, effective batch, optimizer rates, and fine-tune schedule must match.
@@ -112,9 +114,25 @@ The repository also includes a script kernel in [`kaggle_finetune_kernel/`](../k
 kaggle kernels push -p kaggle_finetune_kernel
 ```
 
-The script uses the public Kaggle dataset `sagnikkayalcse52/coco2014vqa` as the COCO image source by default, downloads the official VQA v2 question/annotation JSON files at runtime, and normalizes everything into the internal VQA directory structure under `/kaggle/working/multimodal-vqa/vqa`. By default it runs `configs/kaggle_strong.yaml`; set `CONFIG_PATH=configs/kaggle_finetune.yaml` to reproduce the earlier fine-tuning run.
+The script uses `sagnikkayalcse52/coco2014vqa` as its initial COCO image source, downloads official VQA v2 JSON files, repairs any referenced validation images missing from that mirror using the official COCO image host, and then enforces the official train/val counts. It runs `configs/kaggle_vilt.yaml`, verifies W&B before training, exports all 214,354 validation predictions, runs the official VQA toolkit, and packages the artifacts.
 
-脚本默认将公开 Kaggle 数据集 `sagnikkayalcse52/coco2014vqa` 作为 COCO 图片源，在运行时下载官方 VQA v2 questions/annotations JSON，并在 `/kaggle/working/multimodal-vqa/vqa` 下自动规范化为项目内部训练所需的 VQA 目录结构。默认运行 `configs/kaggle_strong.yaml`；如需复现上一轮微调，请设置 `CONFIG_PATH=configs/kaggle_finetune.yaml`。
+脚本将 `sagnikkayalcse52/coco2014vqa` 作为初始 COCO 图片源，下载官方 VQA v2 JSON；若镜像缺少验证集引用图片，则从 COCO 官方图片地址补齐，随后按官方 train/val 数量执行严格校验。任务默认运行 `configs/kaggle_vilt.yaml`，训练前验证 W&B，导出全部 214,354 条验证预测，运行官方 VQA toolkit，并打包所有产物。
+
+## Controlled Second Run / 受控第二轮
+
+After Run 1, generate the only permitted follow-up config from its history:
+
+首轮结束后，根据训练历史生成唯一允许的第二轮配置：
+
+```bash
+python scripts/select_vilt_followup.py \
+  --history /kaggle/working/multimodal-vqa/vilt/training_history.csv \
+  --output-config /kaggle/working/kaggle_vilt_followup.yaml
+```
+
+The selector chooses one predeclared branch: seed replication after meeting both gates, last-six-layer tuning for a train/validation gap above 0.10, backbone LR `1e-5` for repeated instability, or backbone LR `3e-5` for stable under-optimization. No third full run is planned.
+
+选择器只会进入预先定义的一条分支：双指标达标后更换 seed 复现；训练/验证差距超过 0.10 时仅训练最后 6 层；重复不稳定时将 backbone LR 降至 `1e-5`；稳定但优化不足时将其升至 `3e-5`。计划中不进行第三次全量训练。
 
 ## Official Evaluation / 官方评估
 

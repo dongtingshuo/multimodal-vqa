@@ -1,0 +1,58 @@
+seed: 42
+device: cpu
+
+data:
+  root: data/vqa
+  train_split: train
+  val_split: val
+  answer_vocab_path: outputs/smoke_vilt/answer_vocab.json
+  answer_vocab_size: 8
+  max_train_samples: 4
+  max_val_samples: 2
+  image_size: 32
+  max_question_length: 12
+  num_workers: 0
+  augmentation:
+    enabled: false
+
+model:
+  name: vilt
+  dropout: 0.0
+  freeze_backbones: false
+  gradient_checkpointing: false
+  trainable_layers: 2
+  mock_backbones: true
+  mock_hidden_size: 32
+
+train:
+  batch_size: 1
+  epochs: 1
+  lr: 0.001
+  backbone_lr: 0.0001
+  head_lr: 0.001
+  weight_decay: 0.0
+  grad_clip_norm: 1.0
+  gradient_accumulation_steps: 2
+  staged_finetuning: false
+  use_amp: false
+  checkpoint_dir: outputs/smoke_vilt
+  checkpoint_name: best.pt
+  latest_checkpoint_name: latest.pt
+  log_every: 1
+  selection_metric: vqa_score
+  use_scheduler: true
+  scheduler: warmup_plateau
+  scheduler_factor: 0.5
+  scheduler_patience: 1
+  warmup_ratio: 0.25
+  backbone_min_lr: 0.000001
+  head_min_lr: 0.00001
+  early_stopping_start_epoch: 1
+  early_stopping_patience: 0
+
+tracking:
+  wandb:
+    enabled: false
+
+infer:
+  topk: 5

@@ -30,6 +30,11 @@ def _cuda_amp_enabled(device: torch.device, use_amp: bool) -> bool:
     return bool(use_amp and device.type == "cuda")
 
 
+def forward_model(model: nn.Module, batch: dict[str, Any]) -> torch.Tensor:
+    optional = {key: batch[key] for key in ("pixel_mask", "token_type_ids") if key in batch}
+    return model(batch["images"], batch["input_ids"], batch["attention_mask"], **optional)
+
+
 def vqa_bce_loss(logits: torch.Tensor, targets: torch.Tensor, label_smoothing: float = 0.0) -> torch.Tensor:
     """Return the standard per-example VQA multilabel loss."""
     batch_size = max(int(logits.shape[0]), 1)
@@ -62,6 +67,7 @@ def train_one_epoch(
     step_callback: Callable[[dict[str, float]], None] | None = None,
     epoch: int | None = None,
     global_step_start: int = 0,
+    scheduler: Any | None = None,
 ) -> dict[str, float]:
     model.train()
     amp_enabled = _cuda_amp_enabled(device, use_amp)
@@ -83,7 +89,7 @@ def train_one_epoch(
         batch = move_batch_to_device(batch, device)
 
         with torch.amp.autocast(device_type=device.type, enabled=amp_enabled):
-            logits = model(batch["images"], batch["input_ids"], batch["attention_mask"])
+            logits = forward_model(model, batch)
             loss = vqa_bce_loss(logits, batch["targets"], label_smoothing=label_smoothing)
 
         loss_divisor = final_group_size if final_group_size and step >= final_group_start else accumulation_steps
@@ -95,6 +101,9 @@ def train_one_epoch(
                 torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip_norm)
             scaler.step(optimizer)
             scaler.update()
+            step_update = getattr(scheduler, "step_update", None)
+            if callable(step_update):
+                step_update()
             optimizer.zero_grad(set_to_none=True)
             optimizer_steps += 1
 
@@ -119,6 +128,12 @@ def train_one_epoch(
                 "train/top5_vqa_score": total_top5_vqa_score / total_examples,
                 "train/lr": float(optimizer.param_groups[0]["lr"]),
             }
+            running.update(
+                {
+                    f"train/lr/{group.get('group_name', index)}": float(group["lr"])
+                    for index, group in enumerate(optimizer.param_groups)
+                }
+            )
             progress.set_postfix(
                 loss=running["train/loss"],
                 acc=running["train/accuracy"],
@@ -160,7 +175,7 @@ def evaluate(
     for batch in tqdm(dataloader, desc="eval", leave=False):
         batch = move_batch_to_device(batch, device)
         with torch.amp.autocast(device_type=device.type, enabled=amp_enabled):
-            logits = model(batch["images"], batch["input_ids"], batch["attention_mask"])
+            logits = forward_model(model, batch)
         predictions = logits.argmax(dim=1)
         labels = batch["labels"]
         known_mask = labels >= 0

@@ -5,6 +5,7 @@ import pytest
 from vqa_project.config import load_config
 from vqa_project.model import build_model
 from vqa_project.training import (
+    WarmupPlateauScheduler,
     build_optimizer,
     build_scheduler,
     configure_finetune_stage,
@@ -64,6 +65,16 @@ def test_optimizer_uses_differential_learning_rates() -> None:
     assert any(group["weight_decay"] == 0.0 for group in optimizer.param_groups)
 
 
+def test_vilt_optimizer_uses_backbone_and_head_learning_rates() -> None:
+    model = build_model({**model_config(), "name": "vilt", "freeze_backbones": False})
+    optimizer = build_optimizer(
+        model,
+        {**train_config(), "backbone_lr": 2e-5, "head_lr": 1e-4},
+    )
+    rates = {group["group_name"].split("_")[0]: group["lr"] for group in optimizer.param_groups}
+    assert rates == {"backbone": 2e-5, "head": 1e-4}
+
+
 def test_resume_signature_ignores_runtime_paths_and_total_epochs() -> None:
     original = load_config("configs/kaggle_finetune.yaml")
     changed = load_config("configs/kaggle_finetune.yaml")
@@ -105,7 +116,42 @@ def test_warmup_cosine_scheduler_steps_without_metric() -> None:
     assert optimizer.param_groups[0]["lr"] != pytest.approx(first_lr)
 
 
+def test_warmup_plateau_scheduler_warms_per_optimizer_step_and_restores_state() -> None:
+    model = build_model({**model_config(), "name": "vilt", "freeze_backbones": False})
+    cfg = {
+        **train_config(),
+        "backbone_lr": 2e-5,
+        "head_lr": 1e-4,
+        "backbone_min_lr": 1e-6,
+        "head_min_lr": 5e-6,
+        "use_scheduler": True,
+        "scheduler": "warmup_plateau",
+        "warmup_ratio": 0.5,
+    }
+    optimizer = build_optimizer(model, cfg)
+    scheduler = build_scheduler(optimizer, cfg, total_epochs=2, steps_per_epoch=2)
+    assert isinstance(scheduler, WarmupPlateauScheduler)
+    initial_lrs = [group["lr"] for group in optimizer.param_groups]
+    scheduler.step_update()
+    assert all(after > before for after, before in zip([group["lr"] for group in optimizer.param_groups], initial_lrs))
+
+    state = scheduler.state_dict()
+    restored_optimizer = build_optimizer(model, cfg)
+    restored = build_scheduler(restored_optimizer, cfg, total_epochs=2, steps_per_epoch=2)
+    assert isinstance(restored, WarmupPlateauScheduler)
+    restored.load_state_dict(state)
+    assert restored.state_dict()["current_lrs"] == pytest.approx(state["current_lrs"])
+
+
 def test_legacy_checkpoint_cannot_resume() -> None:
     config = load_config("configs/default.yaml")
     with pytest.raises(ValueError, match="format v3"):
         validate_resume_config(config, {"format_version": 2, "config": config})
+
+
+def test_kaggle_vilt_config_requires_online_wandb() -> None:
+    config = load_config("configs/kaggle_vilt.yaml")
+    assert config["model"]["name"] == "vilt"
+    assert config["tracking"]["wandb"]["enabled"] is True
+    assert config["tracking"]["wandb"]["required"] is True
+    assert config["tracking"]["wandb"]["log_checkpoints"] is False

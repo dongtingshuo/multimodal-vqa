@@ -19,6 +19,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "max_val_samples": 1000,
         "image_size": 224,
         "max_question_length": 32,
+        "processor_name": None,
         "num_workers": 0,
         "augmentation": {
             "enabled": False,
@@ -46,6 +47,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "grad_clip_norm": 1.0,
         "gradient_accumulation_steps": 1,
         "staged_finetuning": False,
+        "fixed_finetune_stage": None,
         "freeze_epochs": 2,
         "unfreeze_image_blocks": 1,
         "unfreeze_text_layers": 2,
@@ -63,6 +65,12 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "warmup_ratio": 0.1,
         "min_lr": 1e-6,
         "label_smoothing": 0.0,
+        "backbone_lr": 2e-5,
+        "head_lr": 1e-4,
+        "backbone_min_lr": 1e-6,
+        "head_min_lr": 5e-6,
+        "early_stopping_min_delta": 0.0,
+        "trainable_vilt_layers": 12,
     },
     "runtime": {
         "run_dir": "runs",
@@ -144,7 +152,7 @@ def resolve_checkpoint_config(runtime_config: dict[str, Any], checkpoint: dict[s
 
     stored_data = stored_config.get("data")
     if isinstance(stored_data, dict):
-        for key in ("answer_vocab_size", "image_size", "max_question_length"):
+        for key in ("answer_vocab_size", "image_size", "max_question_length", "processor_name"):
             if key in stored_data:
                 resolved["data"][key] = stored_data[key]
     return resolved

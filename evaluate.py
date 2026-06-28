@@ -13,9 +13,9 @@ from vqa_project.config import (
     resolve_checkpoint_config,
     resolve_device,
 )
-from vqa_project.data import VQACollator, VQADataset
+from vqa_project.data import VQADataset
 from vqa_project.engine import evaluate, load_checkpoint
-from vqa_project.hf import load_tokenizer
+from vqa_project.inputs import build_input_pipeline
 from vqa_project.model import build_model
 
 
@@ -42,8 +42,7 @@ def main() -> None:
     answer_vocab = AnswerVocab(
         checkpoint.get("idx_to_answer") or AnswerVocab.load(data_cfg["answer_vocab_path"]).idx_to_answer
     )
-    tokenizer = load_tokenizer(model_cfg["text_model_name"])
-    collator = VQACollator(tokenizer, data_cfg["max_question_length"])
+    input_pipeline = build_input_pipeline(model_cfg, data_cfg)
 
     val_dataset = VQADataset(
         root=data_cfg["root"],
@@ -53,6 +52,7 @@ def main() -> None:
         max_samples=data_cfg["max_val_samples"],
         train=False,
         filter_without_known_answer=not bool(args.predictions_output),
+        image_mode=input_pipeline.image_mode,
     )
     num_workers = int(data_cfg.get("num_workers", 0))
     pin_memory = bool(train_cfg.get("pin_memory", device.type == "cuda")) and device.type == "cuda"
@@ -62,7 +62,7 @@ def main() -> None:
         batch_size=train_cfg["batch_size"],
         shuffle=False,
         num_workers=num_workers,
-        collate_fn=collator,
+        collate_fn=input_pipeline.collator,
         pin_memory=pin_memory,
         persistent_workers=persistent_workers,
     )

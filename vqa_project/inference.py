@@ -5,13 +5,14 @@ from pathlib import Path
 import torch
 from PIL import Image
 
-from .data import build_image_transform
+from .engine import forward_model
+from .inputs import InputPipeline, encode_single_input
 
 
 @torch.no_grad()
 def predict(
     model,
-    tokenizer,
+    input_pipeline: InputPipeline,
     answer_vocab,
     image_path: str | Path,
     question: str,
@@ -21,21 +22,16 @@ def predict(
     topk: int = 5,
 ) -> list[tuple[str, float]]:
     model.eval()
-    transform = build_image_transform(image_size, train=False)
     with Image.open(image_path) as image:
-        image_tensor = transform(image.convert("RGB")).unsqueeze(0).to(device)
-
-    tokens = tokenizer(
-        [question],
-        padding=True,
-        truncation=True,
-        max_length=max_question_length,
-        return_tensors="pt",
-    )
-    input_ids = tokens["input_ids"].to(device)
-    attention_mask = tokens["attention_mask"].to(device)
-
-    logits = model(image_tensor, input_ids, attention_mask)
+        batch = encode_single_input(
+            input_pipeline,
+            image,
+            question,
+            device,
+            image_size,
+            max_question_length,
+        )
+    logits = forward_model(model, batch)
     probabilities = torch.softmax(logits, dim=-1).squeeze(0)
     values, indices = probabilities.topk(min(topk, len(answer_vocab)))
     return [(answer_vocab.decode(idx.item()), value.item()) for value, idx in zip(values, indices)]

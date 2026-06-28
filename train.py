@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import math
 import time
 from pathlib import Path
 
@@ -9,7 +10,7 @@ from torch.utils.data import DataLoader
 
 from vqa_project.answers import AnswerVocab, build_answer_vocab
 from vqa_project.config import apply_runtime_overrides, load_config, resolve_device
-from vqa_project.data import VQACollator, VQADataset, default_annotation_path
+from vqa_project.data import VQADataset, default_annotation_path
 from vqa_project.engine import (
     evaluate,
     load_checkpoint,
@@ -18,7 +19,7 @@ from vqa_project.engine import (
     set_seed,
     train_one_epoch,
 )
-from vqa_project.hf import load_tokenizer
+from vqa_project.inputs import build_input_pipeline
 from vqa_project.model import build_model
 from vqa_project.tracking import (
     collect_run_metadata,
@@ -115,6 +116,13 @@ def _head_learning_rate(optimizer: torch.optim.Optimizer) -> float:
     return float(optimizer.param_groups[0]["lr"])
 
 
+def _learning_rate_metrics(optimizer: torch.optim.Optimizer) -> dict[str, float]:
+    return {
+        f"learning_rate/{group.get('group_name', index)}": float(group["lr"])
+        for index, group in enumerate(optimizer.param_groups)
+    }
+
+
 def main() -> None:
     args = parse_args()
     config = apply_runtime_overrides(
@@ -148,8 +156,7 @@ def main() -> None:
     model_cfg = config["model"]
     train_cfg = config["train"]
     answer_vocab = load_or_build_answer_vocab(data_cfg, resume_checkpoint)
-    tokenizer = load_tokenizer(model_cfg["text_model_name"])
-    collator = VQACollator(tokenizer, data_cfg["max_question_length"])
+    input_pipeline = build_input_pipeline(model_cfg, data_cfg)
 
     train_dataset = VQADataset(
         root=data_cfg["root"],
@@ -159,6 +166,7 @@ def main() -> None:
         max_samples=data_cfg["max_train_samples"],
         train=True,
         augmentation=data_cfg.get("augmentation"),
+        image_mode=input_pipeline.image_mode,
     )
     val_dataset = VQADataset(
         root=data_cfg["root"],
@@ -168,6 +176,7 @@ def main() -> None:
         max_samples=data_cfg["max_val_samples"],
         train=False,
         augmentation=data_cfg.get("augmentation"),
+        image_mode=input_pipeline.image_mode,
     )
     print(f"answer_vocab={len(answer_vocab)} train_examples={len(train_dataset)} val_examples={len(val_dataset)}")
 
@@ -179,7 +188,7 @@ def main() -> None:
         data_cfg=data_cfg,
         train_cfg=train_cfg,
         device=device,
-        collator=collator,
+        collator=input_pipeline.collator,
         generator=data_generator,
     )
     val_loader = build_dataloader(
@@ -189,13 +198,16 @@ def main() -> None:
         data_cfg=data_cfg,
         train_cfg=train_cfg,
         device=device,
-        collator=collator,
+        collator=input_pipeline.collator,
     )
 
     model = build_model(model_cfg, answer_vocab_size=len(answer_vocab)).to(device)
     optimizer = build_optimizer(model, train_cfg)
     total_epochs = int(train_cfg["epochs"])
-    scheduler = build_scheduler(optimizer, train_cfg, total_epochs)
+    optimizer_steps_per_epoch = math.ceil(
+        len(train_loader) / max(int(train_cfg.get("gradient_accumulation_steps", 1)), 1)
+    )
+    scheduler = build_scheduler(optimizer, train_cfg, total_epochs, steps_per_epoch=optimizer_steps_per_epoch)
     scaler = torch.amp.GradScaler("cuda", enabled=bool(train_cfg.get("use_amp", False) and device.type == "cuda"))
 
     runtime_cfg = config.get("runtime", {})
@@ -250,8 +262,12 @@ def main() -> None:
         if isinstance(checkpoint_metadata, dict):
             resume_wandb_id = (checkpoint_metadata.get("wandb") or {}).get("run_id")
     tracker = init_wandb_tracker(config.get("tracking", {}), config, run_name=run_name, resume_run_id=resume_wandb_id)
+    wandb_required = bool(config.get("tracking", {}).get("wandb", {}).get("required", False))
+    if wandb_required and not tracker.enabled:
+        raise RuntimeError(f"W&B online tracking is required but unavailable: {tracker.reason}")
     if tracker.enabled:
         run_metadata["wandb"] = {"run_id": tracker.run_id, "url": tracker.url}
+        print(f"W&B run: {tracker.url}")
     elif tracker.reason:
         run_metadata["wandb"] = {"enabled": False, "reason": tracker.reason}
     write_json(metadata_path, run_metadata)
@@ -284,6 +300,7 @@ def main() -> None:
                 step_callback=lambda payload: tracker.log(payload, step=int(payload["global_step"])),
                 epoch=epoch,
                 global_step_start=global_step,
+                scheduler=scheduler,
             )
             global_step += int(train_metrics["optimizer_steps"])
             val_metrics = evaluate(model, val_loader, device, use_amp=train_cfg.get("use_amp", False))
@@ -294,9 +311,14 @@ def main() -> None:
             step_scheduler(scheduler, selected_value)
             current_lr = _head_learning_rate(optimizer)
 
-            is_best = selected_value > best_metric
+            previous_best = best_metric
+            is_best = selected_value > previous_best
             if is_best:
                 best_metric = selected_value
+            meaningful_improvement = selected_value > previous_best + float(
+                train_cfg.get("early_stopping_min_delta", 0.0)
+            )
+            if meaningful_improvement:
                 epochs_without_improvement = 0
             elif epoch >= int(train_cfg.get("early_stopping_start_epoch", 6)):
                 epochs_without_improvement += 1
@@ -347,8 +369,7 @@ def main() -> None:
 
             write_training_history(history_path, history)
             save_training_curves(curves_path, history)
-            tracker.log(
-                {
+            epoch_log = {
                     "epoch": epoch,
                     "stage": stage,
                     "trainable_parameters": parameter_counts["trainable"],
@@ -363,9 +384,9 @@ def main() -> None:
                     "learning_rate": current_lr,
                     "best_metric": best_metric,
                     "epoch_seconds": epoch_row["epoch_seconds"],
-                },
-                step=global_step,
-            )
+                }
+            epoch_log.update(_learning_rate_metrics(optimizer))
+            tracker.log(epoch_log, step=global_step)
             print(
                 f"train_loss={train_metrics['loss']:.4f} train_vqa={train_metrics['vqa_score']:.4f} "
                 f"val_loss={val_metrics['loss']:.4f} val_acc={val_metrics['accuracy']:.4f} "

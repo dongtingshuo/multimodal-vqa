@@ -88,12 +88,16 @@ class VQADataset(Dataset):
         train: bool = False,
         filter_without_known_answer: bool = True,
         augmentation: dict[str, Any] | None = None,
+        image_mode: str = "tensor",
     ) -> None:
         self.root = Path(root)
         self.split = split
         self.answer_vocab = answer_vocab
         self.answer_to_idx = answer_vocab.answer_to_idx
         self.image_dir = Path(image_dir) if image_dir else default_image_dir(self.root, split)
+        if image_mode not in {"tensor", "path"}:
+            raise ValueError("image_mode must be 'tensor' or 'path'.")
+        self.image_mode = image_mode
         self.transform = build_image_transform(image_size, train=train, augmentation=augmentation)
 
         q_path = Path(question_path) if question_path else default_question_path(self.root, split)
@@ -153,10 +157,7 @@ class VQADataset(Dataset):
     def __getitem__(self, idx: int) -> dict[str, Any]:
         example = self.examples[idx]
         image_path = build_image_path(self.image_dir, example["image_id"], self.split)
-        with Image.open(image_path) as image:
-            image_tensor = self.transform(image.convert("RGB"))
-        return {
-            "image": image_tensor,
+        item = {
             "question": example["question"],
             "target_indices": torch.tensor(example["target_indices"], dtype=torch.long),
             "target_scores": torch.tensor(example["target_scores"], dtype=torch.float32),
@@ -165,6 +166,21 @@ class VQADataset(Dataset):
             "question_id": example["question_id"],
             "image_id": example["image_id"],
         }
+        if self.image_mode == "path":
+            item["image_path"] = str(image_path)
+        else:
+            with Image.open(image_path) as image:
+                item["image"] = self.transform(image.convert("RGB"))
+        return item
+
+
+def _collate_targets(batch: list[dict[str, Any]]) -> torch.Tensor:
+    target_size = int(batch[0]["target_size"])
+    targets = torch.zeros((len(batch), target_size), dtype=torch.float32)
+    for row, item in enumerate(batch):
+        if item["target_indices"].numel():
+            targets[row, item["target_indices"]] = item["target_scores"]
+    return targets
 
 
 class VQACollator:
@@ -174,11 +190,6 @@ class VQACollator:
 
     def __call__(self, batch: list[dict[str, Any]]) -> dict[str, Any]:
         questions = [item["question"] for item in batch]
-        target_size = int(batch[0]["target_size"])
-        targets = torch.zeros((len(batch), target_size), dtype=torch.float32)
-        for row, item in enumerate(batch):
-            if item["target_indices"].numel():
-                targets[row, item["target_indices"]] = item["target_scores"]
         tokens = self.tokenizer(
             questions,
             padding=True,
@@ -190,9 +201,44 @@ class VQACollator:
             "images": torch.stack([item["image"] for item in batch]),
             "input_ids": tokens["input_ids"],
             "attention_mask": tokens["attention_mask"],
-            "targets": targets,
+            "targets": _collate_targets(batch),
             "labels": torch.stack([item["label"] for item in batch]),
             "questions": questions,
             "question_ids": [item["question_id"] for item in batch],
             "image_ids": [item["image_id"] for item in batch],
         }
+
+
+class ViltVQACollator:
+    def __init__(self, processor, max_question_length: int) -> None:
+        self.processor = processor
+        self.max_question_length = max_question_length
+
+    def __call__(self, batch: list[dict[str, Any]]) -> dict[str, Any]:
+        questions = [item["question"] for item in batch]
+        images = []
+        for item in batch:
+            with Image.open(item["image_path"]) as image:
+                images.append(image.convert("RGB").copy())
+        encoded = self.processor(
+            images=images,
+            text=questions,
+            padding=True,
+            truncation=True,
+            max_length=self.max_question_length,
+            return_tensors="pt",
+        )
+        result = {
+            "images": encoded["pixel_values"],
+            "input_ids": encoded["input_ids"],
+            "attention_mask": encoded["attention_mask"],
+            "targets": _collate_targets(batch),
+            "labels": torch.stack([item["label"] for item in batch]),
+            "questions": questions,
+            "question_ids": [item["question_id"] for item in batch],
+            "image_ids": [item["image_id"] for item in batch],
+        }
+        for key in ("pixel_mask", "token_type_ids"):
+            if key in encoded:
+                result[key] = encoded[key]
+        return result
