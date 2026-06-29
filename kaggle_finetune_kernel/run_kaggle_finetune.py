@@ -21,6 +21,9 @@ RESUME_ROOT = Path(
 TORCH_VERSION = os.environ.get("TORCH_VERSION", "2.4.1+cu121")
 TORCHVISION_VERSION = os.environ.get("TORCHVISION_VERSION", "0.19.1+cu121")
 PYTORCH_INDEX_URL = os.environ.get("PYTORCH_INDEX_URL", "https://download.pytorch.org/whl/cu121")
+PYTORCH_RUNTIME_DIR = Path(
+    os.environ.get("PYTORCH_RUNTIME_DIR", WORK_ROOT / "pytorch-runtime")
+)
 COCO_IMAGE_BASE_URL = os.environ.get(
     "COCO_IMAGE_BASE_URL", "https://s3.amazonaws.com/images.cocodataset.org"
 )
@@ -58,11 +61,7 @@ def run(command, cwd=None):
     subprocess.run([str(part) for part in command], cwd=cwd, check=True)
 
 
-def preinstalled_torch_is_usable():
-    if os.environ.get("FORCE_TORCH_INSTALL", "").strip().lower() in {"1", "true", "yes"}:
-        print("FORCE_TORCH_INSTALL is enabled; installing the pinned PyTorch stack", flush=True)
-        return False
-
+def torch_runtime_is_usable():
     probe = subprocess.run(
         [
             "python",
@@ -70,8 +69,12 @@ def preinstalled_torch_is_usable():
             (
                 "import torch, torchvision; "
                 "assert torch.cuda.is_available(), 'CUDA is unavailable'; "
+                "value = torch.ones(1, device='cuda'); "
+                "torch.cuda.synchronize(); "
+                "assert value.item() == 1.0, 'CUDA tensor probe failed'; "
                 "print(f'Using preinstalled torch={torch.__version__} '"
-                "f'torchvision={torchvision.__version__} cuda={torch.version.cuda}')"
+                "f'torchvision={torchvision.__version__} cuda={torch.version.cuda} '"
+                "f'device_capability={torch.cuda.get_device_capability()}')"
             ),
         ],
         cwd=REPO_ROOT,
@@ -88,21 +91,44 @@ def preinstalled_torch_is_usable():
     return False
 
 
+def preinstalled_torch_is_usable():
+    if os.environ.get("FORCE_TORCH_INSTALL", "").strip().lower() in {"1", "true", "yes"}:
+        print("FORCE_TORCH_INSTALL is enabled; installing the pinned PyTorch stack", flush=True)
+        return False
+    return torch_runtime_is_usable()
+
+
+def activate_pinned_torch_runtime():
+    PYTORCH_RUNTIME_DIR.mkdir(parents=True, exist_ok=True)
+    run(
+        [
+            "python",
+            "-m",
+            "pip",
+            "install",
+            "--no-cache-dir",
+            "--upgrade",
+            "--target",
+            PYTORCH_RUNTIME_DIR,
+            "--index-url",
+            PYTORCH_INDEX_URL,
+            f"torch=={TORCH_VERSION}",
+            f"torchvision=={TORCHVISION_VERSION}",
+        ],
+        cwd=REPO_ROOT,
+    )
+    existing_pythonpath = os.environ.get("PYTHONPATH", "")
+    paths = [str(PYTORCH_RUNTIME_DIR)]
+    if existing_pythonpath:
+        paths.append(existing_pythonpath)
+    os.environ["PYTHONPATH"] = os.pathsep.join(paths)
+    if not torch_runtime_is_usable():
+        raise RuntimeError(f"Pinned PyTorch runtime failed its CUDA probe: {PYTORCH_RUNTIME_DIR}")
+
+
 def install_training_dependencies():
     if not preinstalled_torch_is_usable():
-        run(
-            [
-                "python",
-                "-m",
-                "pip",
-                "install",
-                "--index-url",
-                PYTORCH_INDEX_URL,
-                f"torch=={TORCH_VERSION}",
-                f"torchvision=={TORCHVISION_VERSION}",
-            ],
-            cwd=REPO_ROOT,
-        )
+        activate_pinned_torch_runtime()
     run(
         [
             "python",

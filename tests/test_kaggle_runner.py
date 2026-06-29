@@ -39,14 +39,19 @@ def test_dependency_install_reuses_usable_preinstalled_torch(monkeypatch) -> Non
     assert not any(str(part).startswith("torch==") for part in commands[0])
 
 
-def test_dependency_install_falls_back_to_pinned_torch(monkeypatch) -> None:
+def test_dependency_install_falls_back_to_pinned_torch(tmp_path: Path, monkeypatch) -> None:
     commands = []
+    runtime_dir = tmp_path / "pytorch-runtime"
+    monkeypatch.setattr(run_kaggle_finetune, "PYTORCH_RUNTIME_DIR", runtime_dir)
     monkeypatch.setattr(run_kaggle_finetune, "preinstalled_torch_is_usable", lambda: False)
+    monkeypatch.setattr(run_kaggle_finetune, "torch_runtime_is_usable", lambda: True)
     monkeypatch.setattr(run_kaggle_finetune, "run", lambda command, cwd=None: commands.append(command))
 
     run_kaggle_finetune.install_training_dependencies()
 
     assert len(commands) == 2
+    assert "--target" in commands[0]
+    assert runtime_dir in commands[0]
     assert f"torch=={run_kaggle_finetune.TORCH_VERSION}" in commands[0]
     assert f"torchvision=={run_kaggle_finetune.TORCHVISION_VERSION}" in commands[0]
     assert "transformers>=4.40" in commands[1]

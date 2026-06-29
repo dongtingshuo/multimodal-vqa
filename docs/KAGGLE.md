@@ -118,9 +118,9 @@ The script uses `sagnikkayalcse52/coco2014vqa` as its initial COCO image source,
 
 脚本将 `sagnikkayalcse52/coco2014vqa` 作为初始 COCO 图片源，下载官方 VQA v2 JSON；若镜像缺少验证集引用图片，则从 COCO 官方图片地址补齐，随后按官方 train/val 数量执行严格校验。任务默认运行 `configs/kaggle_vilt.yaml`，训练前验证 W&B，导出全部 214,354 条验证预测，运行官方 VQA toolkit，并打包所有产物。
 
-The runner reuses Kaggle's preinstalled `torch` and `torchvision` when both import correctly and CUDA is available. This avoids replacing several gigabytes of compatible GPU packages on every launch. Set `FORCE_TORCH_INSTALL=1` only when the environment probe fails or a pinned fallback is required; the fallback versions can be overridden with `TORCH_VERSION`, `TORCHVISION_VERSION`, and `PYTORCH_INDEX_URL`.
+The runner reuses Kaggle's preinstalled `torch` and `torchvision` only after a real CUDA tensor operation succeeds on the assigned GPU. This catches architecture mismatches such as a P100 (`sm_60`) paired with a runtime built only for `sm_70` and newer. When the probe fails, the pinned stack is installed into an isolated working directory and activated through `PYTHONPATH`, leaving Kaggle's system packages untouched. Set `FORCE_TORCH_INSTALL=1` to force this fallback; its location and versions can be overridden with `PYTORCH_RUNTIME_DIR`, `TORCH_VERSION`, `TORCHVISION_VERSION`, and `PYTORCH_INDEX_URL`.
 
-当 Kaggle 预装的 `torch`、`torchvision` 可正常导入且 CUDA 可用时，runner 会直接复用该环境，避免每次启动都替换数 GB 的兼容 GPU 依赖。仅在环境探测失败或必须使用固定版本回退时设置 `FORCE_TORCH_INSTALL=1`；可通过 `TORCH_VERSION`、`TORCHVISION_VERSION` 和 `PYTORCH_INDEX_URL` 覆盖回退版本。
+runner 仅在真实 CUDA 张量运算可在已分配 GPU 上成功执行时，才复用 Kaggle 预装的 `torch` 和 `torchvision`。这能识别 P100（`sm_60`）与仅支持 `sm_70` 及更新架构的运行时不兼容等问题。探测失败时，固定版本会安装到隔离的工作目录并通过 `PYTHONPATH` 启用，不修改 Kaggle 系统包。设置 `FORCE_TORCH_INSTALL=1` 可强制使用该回退；可通过 `PYTORCH_RUNTIME_DIR`、`TORCH_VERSION`、`TORCHVISION_VERSION` 和 `PYTORCH_INDEX_URL` 覆盖目录与版本。
 
 ## Controlled Second Run / 受控第二轮
 
