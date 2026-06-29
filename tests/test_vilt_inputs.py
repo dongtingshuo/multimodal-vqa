@@ -6,8 +6,9 @@ import pytest
 import torch
 from PIL import Image
 
+import vqa_project.inputs as inputs_module
 from vqa_project.data import ViltVQACollator
-from vqa_project.inputs import TinyViltProcessor, build_input_pipeline
+from vqa_project.inputs import DEFAULT_VILT_PROCESSOR, TinyViltProcessor, build_input_pipeline
 
 
 class FakeViltProcessor:
@@ -50,3 +51,21 @@ def test_mock_vilt_pipeline_never_requires_a_hugging_face_download() -> None:
     )
     assert isinstance(pipeline.processor, TinyViltProcessor)
     assert pipeline.image_mode == "path"
+
+
+def test_vilt_pipeline_uses_processor_repository_with_complete_assets(monkeypatch) -> None:
+    requested = []
+    processor = FakeViltProcessor()
+    monkeypatch.setattr(
+        inputs_module,
+        "load_vilt_processor",
+        lambda model_name: requested.append(model_name) or processor,
+    )
+
+    pipeline = build_input_pipeline(
+        {"name": "vilt", "pretrained_model_name": "dandelin/vilt-b32-mlm-itm"},
+        {"image_size": 384, "max_question_length": 40},
+    )
+
+    assert requested == [DEFAULT_VILT_PROCESSOR]
+    assert pipeline.processor is processor

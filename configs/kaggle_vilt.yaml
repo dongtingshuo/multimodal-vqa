@@ -11,7 +11,7 @@ data:
   max_val_samples: null
   image_size: 384
   max_question_length: 40
-  processor_name: dandelin/vilt-b32-mlm-itm
+  processor_name: dandelin/vilt-b32-finetuned-vqa
   num_workers: 4
   augmentation:
     enabled: false

@@ -10,6 +10,8 @@ from torchvision.transforms import functional as vision_functional
 from .data import ViltVQACollator, VQACollator, build_image_transform
 from .hf import load_tokenizer, load_vilt_processor
 
+DEFAULT_VILT_PROCESSOR = "dandelin/vilt-b32-finetuned-vqa"
+
 
 @dataclass(frozen=True)
 class InputPipeline:
@@ -61,8 +63,7 @@ def build_input_pipeline(model_cfg: dict[str, Any], data_cfg: dict[str, Any]) ->
     if model_name == "vilt":
         processor_name = str(
             data_cfg.get("processor_name")
-            or model_cfg.get("pretrained_model_name")
-            or "dandelin/vilt-b32-mlm-itm"
+            or DEFAULT_VILT_PROCESSOR
         )
         processor = (
             TinyViltProcessor(int(data_cfg["image_size"]))

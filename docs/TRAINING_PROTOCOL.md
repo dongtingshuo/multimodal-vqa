@@ -12,6 +12,7 @@ Test whether generic image-text pretrained ViLT can materially exceed the best c
 | --- | --- |
 | Config | `configs/kaggle_vilt.yaml` |
 | Pretrained source | `dandelin/vilt-b32-mlm-itm` |
+| Input processor | `dandelin/vilt-b32-finetuned-vqa` (tokenizer and image processor only) |
 | Seed | 42 |
 | Epoch budget | Up to 10 |
 | Physical / effective batch | 4 / 32 |
