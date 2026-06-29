@@ -58,20 +58,51 @@ def run(command, cwd=None):
     subprocess.run([str(part) for part in command], cwd=cwd, check=True)
 
 
-def install_training_dependencies():
-    run(
+def preinstalled_torch_is_usable():
+    if os.environ.get("FORCE_TORCH_INSTALL", "").strip().lower() in {"1", "true", "yes"}:
+        print("FORCE_TORCH_INSTALL is enabled; installing the pinned PyTorch stack", flush=True)
+        return False
+
+    probe = subprocess.run(
         [
             "python",
-            "-m",
-            "pip",
-            "install",
-            "--index-url",
-            PYTORCH_INDEX_URL,
-            f"torch=={TORCH_VERSION}",
-            f"torchvision=={TORCHVISION_VERSION}",
+            "-c",
+            (
+                "import torch, torchvision; "
+                "assert torch.cuda.is_available(), 'CUDA is unavailable'; "
+                "print(f'Using preinstalled torch={torch.__version__} '"
+                "f'torchvision={torchvision.__version__} cuda={torch.version.cuda}')"
+            ),
         ],
         cwd=REPO_ROOT,
+        check=False,
+        text=True,
+        capture_output=True,
     )
+    if probe.stdout.strip():
+        print(probe.stdout.strip(), flush=True)
+    if probe.returncode == 0:
+        return True
+    if probe.stderr.strip():
+        print(f"Preinstalled PyTorch probe failed: {probe.stderr.strip()}", flush=True)
+    return False
+
+
+def install_training_dependencies():
+    if not preinstalled_torch_is_usable():
+        run(
+            [
+                "python",
+                "-m",
+                "pip",
+                "install",
+                "--index-url",
+                PYTORCH_INDEX_URL,
+                f"torch=={TORCH_VERSION}",
+                f"torchvision=={TORCHVISION_VERSION}",
+            ],
+            cwd=REPO_ROOT,
+        )
     run(
         [
             "python",

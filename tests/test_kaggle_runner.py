@@ -25,3 +25,28 @@ def test_missing_coco_images_use_the_official_s3_bucket(tmp_path: Path, monkeypa
         "https://s3.amazonaws.com/images.cocodataset.org/val2014/COCO_val2014_000000000042.jpg"
     ]
     assert (target / "COCO_val2014_000000000042.jpg").is_file()
+
+
+def test_dependency_install_reuses_usable_preinstalled_torch(monkeypatch) -> None:
+    commands = []
+    monkeypatch.setattr(run_kaggle_finetune, "preinstalled_torch_is_usable", lambda: True)
+    monkeypatch.setattr(run_kaggle_finetune, "run", lambda command, cwd=None: commands.append(command))
+
+    run_kaggle_finetune.install_training_dependencies()
+
+    assert len(commands) == 1
+    assert "transformers>=4.40" in commands[0]
+    assert not any(str(part).startswith("torch==") for part in commands[0])
+
+
+def test_dependency_install_falls_back_to_pinned_torch(monkeypatch) -> None:
+    commands = []
+    monkeypatch.setattr(run_kaggle_finetune, "preinstalled_torch_is_usable", lambda: False)
+    monkeypatch.setattr(run_kaggle_finetune, "run", lambda command, cwd=None: commands.append(command))
+
+    run_kaggle_finetune.install_training_dependencies()
+
+    assert len(commands) == 2
+    assert f"torch=={run_kaggle_finetune.TORCH_VERSION}" in commands[0]
+    assert f"torchvision=={run_kaggle_finetune.TORCHVISION_VERSION}" in commands[0]
+    assert "transformers>=4.40" in commands[1]
