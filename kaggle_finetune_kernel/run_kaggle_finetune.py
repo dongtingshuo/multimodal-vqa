@@ -351,19 +351,33 @@ def load_wandb_api_key():
                 print(f"W&B Secret read attempt {attempt}/5 failed: {type(error).__name__}", flush=True)
             time.sleep(min(5 * attempt, 20))
         if not api_key:
-            raise RuntimeError("WANDB_API_KEY could not be read from Kaggle Secrets") from last_error
+            print(
+                "W&B disabled: WANDB_API_KEY could not be read from Kaggle Secrets; "
+                f"training will continue without online tracking ({type(last_error).__name__}).",
+                flush=True,
+            )
+            return None
     return api_key
 
 
 def configure_wandb(api_key):
+    if not api_key:
+        os.environ["WANDB_MODE"] = "disabled"
+        return False
     os.environ["WANDB_API_KEY"] = api_key
     os.environ["WANDB_MODE"] = "online"
     os.environ.setdefault("WANDB_PROJECT", "multimodal-vqa")
     import wandb
 
-    if not wandb.login(key=api_key, relogin=True, verify=True):
-        raise RuntimeError("W&B authentication failed")
+    try:
+        if not wandb.login(key=api_key, relogin=True, verify=True):
+            raise RuntimeError("wandb.login returned False")
+    except Exception as error:
+        os.environ["WANDB_MODE"] = "disabled"
+        print(f"W&B disabled: authentication failed ({type(error).__name__}); training will continue.", flush=True)
+        return False
     print(f"W&B authenticated; project={os.environ['WANDB_PROJECT']} mode=online", flush=True)
+    return True
 
 
 def run_official_evaluation(data_root):
@@ -411,9 +425,9 @@ def main():
 
     run(["git", "fetch", "--all", "--tags"], cwd=REPO_ROOT)
     run(["git", "checkout", GIT_REF], cwd=REPO_ROOT)
-    wandb_api_key = load_wandb_api_key()
     install_training_dependencies()
-    configure_wandb(wandb_api_key)
+    wandb_api_key = load_wandb_api_key()
+    wandb_enabled = configure_wandb(wandb_api_key)
     latest_checkpoint = restore_resume_artifacts()
     data_root = normalize_vqa_data()
 
@@ -444,14 +458,21 @@ def main():
         CHECKPOINT_DIR,
         "--epochs",
         TOTAL_EPOCHS,
-        "--wandb",
-        "--wandb-project",
-        "multimodal-vqa",
-        "--wandb-tags",
-        "kaggle",
-        "vilt",
-        "coco2014-vqa",
     ]
+    if wandb_enabled:
+        train_command.extend(
+            [
+                "--wandb",
+                "--wandb-project",
+                "multimodal-vqa",
+                "--wandb-tags",
+                "kaggle",
+                "vilt",
+                "coco2014-vqa",
+            ]
+        )
+    else:
+        train_command.append("--no-wandb")
     if latest_checkpoint is not None:
         train_command.extend(["--resume", latest_checkpoint])
 

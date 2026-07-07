@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import sys
+import types
 from pathlib import Path
 
 from kaggle_finetune_kernel import run_kaggle_finetune
@@ -55,3 +57,17 @@ def test_dependency_install_falls_back_to_pinned_torch(tmp_path: Path, monkeypat
     assert f"torch=={run_kaggle_finetune.TORCH_VERSION}" in commands[0]
     assert f"torchvision=={run_kaggle_finetune.TORCHVISION_VERSION}" in commands[0]
     assert "transformers>=4.40" in commands[1]
+
+
+def test_wandb_secret_failure_disables_tracking(monkeypatch) -> None:
+    class BrokenUserSecretsClient:
+        def get_secret(self, label):
+            raise ConnectionError(label)
+
+    fake_kaggle_secrets = types.SimpleNamespace(UserSecretsClient=BrokenUserSecretsClient)
+    monkeypatch.delenv("WANDB_API_KEY", raising=False)
+    monkeypatch.setitem(sys.modules, "kaggle_secrets", fake_kaggle_secrets)
+    monkeypatch.setattr(run_kaggle_finetune.time, "sleep", lambda seconds: None)
+
+    assert run_kaggle_finetune.load_wandb_api_key() is None
+    assert not run_kaggle_finetune.configure_wandb(None)
