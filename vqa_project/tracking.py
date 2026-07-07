@@ -202,8 +202,6 @@ def init_wandb_tracker(
 ) -> WandbTracker:
     wandb_cfg = tracking_cfg.get("wandb", {})
     enabled = bool(wandb_cfg.get("enabled", False))
-    if not enabled and os.environ.get("KAGGLE_KERNEL_RUN_TYPE") and os.environ.get("WANDB_API_KEY"):
-        enabled = True
     if not enabled:
         return WandbTracker(enabled=False, reason="disabled")
     if not os.environ.get("WANDB_API_KEY") and os.environ.get("WANDB_MODE") != "offline":

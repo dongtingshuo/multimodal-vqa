@@ -21,11 +21,11 @@ Test whether generic image-text pretrained ViLT can materially exceed the best c
 | Scheduler | 5% step warmup, then metric plateau reduction |
 | Early stopping | Start epoch 3, patience 2, minimum delta `0.002` |
 | Image processing | ViLT processor at 384 px, no semantic crop or color jitter |
-| Tracking | W&B online required; checkpoint upload disabled |
+| Tracking | Local CSV/PNG/JSON artifacts; checkpoint upload disabled |
 
-Run 1 trains all ViLT layers with AMP, gradient checkpointing, gradient clipping, and parameter-group learning rates. `latest.pt` is saved every epoch and contains optimizer, scheduler, scaler, RNG, history, and W&B run ID state.
+Run 1 trains all ViLT layers with AMP, gradient checkpointing, gradient clipping, and parameter-group learning rates. `latest.pt` is saved every epoch and contains optimizer, scheduler, scaler, RNG, history, and stage state.
 
-首轮使用 AMP、梯度 checkpoint、梯度裁剪和参数组学习率训练全部 ViLT 层。每个 epoch 保存 `latest.pt`，其中包含 optimizer、scheduler、scaler、随机状态、历史记录和 W&B run ID，可在中断后接回同一在线实验。
+首轮使用 AMP、梯度 checkpoint、梯度裁剪和参数组学习率训练全部 ViLT 层。每个 epoch 保存 `latest.pt`，其中包含 optimizer、scheduler、scaler、随机状态、历史记录和训练阶段，可在中断后继续训练。
 
 ## Data Contract / 数据约束
 
@@ -46,9 +46,9 @@ At most one follow-up full run is allowed. `scripts/select_vilt_followup.py` rea
 | Maximum train-validation VQA gap greater than 0.10 | Train only final 6 ViLT layers |
 | Stable but below target | Backbone LR `3e-5` |
 
-All other data, objective, batch, epoch budget, preprocessing, evaluation, and tracking settings remain fixed. There is no third full run in this protocol.
+All other data, objective, batch, epoch budget, preprocessing, evaluation, and artifact settings remain fixed. There is no third full run in this protocol.
 
-除选中变量外，数据、目标函数、batch、epoch 上限、预处理、评估和追踪设置全部保持不变。本协议不安排第三次全量训练。
+除选中变量外，数据、目标函数、batch、epoch 上限、预处理、评估和产物设置全部保持不变。本协议不安排第三次全量训练。
 
 ## Evaluation And Promotion / 评估与晋升
 
@@ -56,6 +56,6 @@ Every completed run must produce `training_history.csv`, `training_curves.png`, 
 
 每次完成的运行必须生成 `training_history.csv`、`training_curves.png`、`run_metadata.json`、`run_summary.json`、`best.pt`、`latest.pt`、214,354 条验证预测和 `official_vqa_metrics.json`。在 ViLT 同时通过两个内部门槛并完成官方分数验证前，继续推荐现有 `checkpoints/kaggle_finetune_best.pt`。
 
-W&B is an observability system, not the source of record. Local/Kaggle artifacts and embedded checkpoint configuration remain authoritative. Real API keys must only be supplied through environment variables or Kaggle Secrets.
+Local/Kaggle artifacts and embedded checkpoint configuration are the source of record. The Kaggle workflow does not depend on external experiment-tracking credentials.
 
-W&B 仅用于在线观测，不是最终记录来源。以本地/Kaggle 产物和 checkpoint 内嵌配置为准。真实 API Key 只能通过环境变量或 Kaggle Secrets 提供。
+以本地/Kaggle 产物和 checkpoint 内嵌配置为准。Kaggle 流程不依赖外部实验追踪凭证。

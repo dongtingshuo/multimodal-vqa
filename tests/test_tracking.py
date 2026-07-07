@@ -63,7 +63,9 @@ def test_run_directory_and_summary_are_written(tmp_path) -> None:
     assert '"best_epoch": 2' in summary_path.read_text(encoding="utf-8")
 
 
-def test_wandb_tracker_is_noop_when_disabled() -> None:
+def test_wandb_tracker_is_noop_when_disabled(monkeypatch) -> None:
+    monkeypatch.setenv("KAGGLE_KERNEL_RUN_TYPE", "Interactive")
+    monkeypatch.setenv("WANDB_API_KEY", "unused-test-key")
     tracker = init_wandb_tracker({"wandb": {"enabled": False}}, {"seed": 42}, run_name="test")
     tracker.log({"metric": 1.0})
     tracker.finish()

@@ -1,8 +1,8 @@
 # Kaggle Training / Kaggle 训练
 
-This workflow uses one training engine for local CPU, local CUDA, Apple MPS, and Kaggle CUDA. The recommended full experiment uses ViLT on Kaggle with strict data validation, epoch-boundary resume, online W&B tracking, prediction export, and official VQA evaluation.
+This workflow uses one training engine for local CPU, local CUDA, Apple MPS, and Kaggle CUDA. The recommended full experiment uses ViLT on Kaggle with strict data validation, epoch-boundary resume, local artifact tracking, prediction export, and official VQA evaluation.
 
-本流程在本地 CPU、本地 CUDA、Apple MPS 和 Kaggle CUDA 之间共用同一训练引擎。推荐的全量实验在 Kaggle 上训练 ViLT，并执行严格数据校验、epoch 边界续训、W&B 在线监控、预测导出和官方 VQA 评估。
+本流程在本地 CPU、本地 CUDA、Apple MPS 和 Kaggle CUDA 之间共用同一训练引擎。推荐的全量实验在 Kaggle 上训练 ViLT，并执行严格数据校验、epoch 边界续训、本地产物记录、预测导出和官方 VQA 评估。
 
 ## Required Dataset Layout / 数据集目录
 
@@ -51,19 +51,19 @@ python train.py \
   --answer-vocab-path /kaggle/working/answer_vocab.json \
   --checkpoint-dir /kaggle/working/multimodal-vqa/finetune
 
-# Recommended Kaggle ViLT experiment with required online W&B tracking
+# Recommended Kaggle ViLT experiment
 python train.py \
   --config configs/kaggle_vilt.yaml \
   --device cuda \
   --data-root /kaggle/input/<dataset>/vqa \
   --answer-vocab-path /kaggle/working/answer_vocab.json \
   --checkpoint-dir /kaggle/working/multimodal-vqa/vilt \
-  --wandb
+  --no-wandb
 ```
 
-Create a Kaggle Secret named `WANDB_API_KEY` and enable it for the notebook. `configs/kaggle_vilt.yaml` marks W&B as required: training stops before the first epoch if the secret cannot be read or verified. A successful launch prints `W&B run: <URL>`; that URL opens the live loss, accuracy, VQA score, learning-rate, stage, and timing charts. `WANDB_ENTITY` is optional. Checkpoints are not uploaded to W&B.
+Kaggle runs do not require W&B or Kaggle Secrets. Training progress and final results are recorded in `training_history.csv`, `training_curves.png`, `run_metadata.json`, `run_summary.json`, and the packaged checkpoint artifacts.
 
-请在 Kaggle Secrets 中创建 `WANDB_API_KEY` 并为当前 notebook 启用。`configs/kaggle_vilt.yaml` 将 W&B 设为必需：如果密钥无法读取或在线验证，训练会在第一个 epoch 前停止。成功启动后日志会输出 `W&B run: <URL>`，打开该链接即可在线查看 loss、accuracy、VQA score、各参数组学习率、训练阶段和耗时。`WANDB_ENTITY` 可选，checkpoint 默认不上传 W&B。
+Kaggle 训练不需要 W&B 或 Kaggle Secrets。训练过程和最终结果会记录在 `training_history.csv`、`training_curves.png`、`run_metadata.json`、`run_summary.json` 以及打包的 checkpoint 产物中。
 
 ## Resume / 断点续训
 
@@ -91,7 +91,7 @@ python train.py \
   --answer-vocab-path /kaggle/working/answer_vocab.json \
   --checkpoint-dir /kaggle/working/multimodal-vqa/vilt \
   --resume /kaggle/working/multimodal-vqa/vilt/latest.pt \
-  --wandb
+  --no-wandb
 ```
 
 Resume permits different local paths, device, workers, logging location, and a larger total epoch count. Model, preprocessing, effective batch, optimizer rates, and fine-tune schedule must match.
@@ -114,9 +114,9 @@ The repository also includes a script kernel in [`kaggle_finetune_kernel/`](../k
 kaggle kernels push -p kaggle_finetune_kernel
 ```
 
-The script uses `sagnikkayalcse52/coco2014vqa` as its initial COCO image source, downloads official VQA v2 JSON files, repairs any referenced validation images missing from that mirror using the official COCO image host, and then enforces the official train/val counts. It runs `configs/kaggle_vilt.yaml`, verifies W&B before training, exports all 214,354 validation predictions, runs the official VQA toolkit, and packages the artifacts.
+The script uses `sagnikkayalcse52/coco2014vqa` as its initial COCO image source, downloads official VQA v2 JSON files, repairs any referenced validation images missing from that mirror using the official COCO image host, and then enforces the official train/val counts. It runs `configs/kaggle_vilt.yaml`, disables W&B for the remote script run, exports all 214,354 validation predictions, runs the official VQA toolkit, and packages the artifacts.
 
-脚本将 `sagnikkayalcse52/coco2014vqa` 作为初始 COCO 图片源，下载官方 VQA v2 JSON；若镜像缺少验证集引用图片，则从 COCO 官方图片地址补齐，随后按官方 train/val 数量执行严格校验。任务默认运行 `configs/kaggle_vilt.yaml`，训练前验证 W&B，导出全部 214,354 条验证预测，运行官方 VQA toolkit，并打包所有产物。
+脚本将 `sagnikkayalcse52/coco2014vqa` 作为初始 COCO 图片源，下载官方 VQA v2 JSON；若镜像缺少验证集引用图片，则从 COCO 官方图片地址补齐，随后按官方 train/val 数量执行严格校验。任务默认运行 `configs/kaggle_vilt.yaml`，远程脚本运行时禁用 W&B，导出全部 214,354 条验证预测，运行官方 VQA toolkit，并打包所有产物。
 
 The runner reuses Kaggle's preinstalled `torch` and `torchvision` only after a real CUDA tensor operation succeeds on the assigned GPU. This catches architecture mismatches such as a P100 (`sm_60`) paired with a runtime built only for `sm_70` and newer. When the probe fails, the pinned stack is installed into an isolated working directory and activated through `PYTHONPATH`, leaving Kaggle's system packages untouched. Set `FORCE_TORCH_INSTALL=1` to force this fallback; its location and versions can be overridden with `PYTORCH_RUNTIME_DIR`, `TORCH_VERSION`, `TORCHVISION_VERSION`, and `PYTORCH_INDEX_URL`.
 

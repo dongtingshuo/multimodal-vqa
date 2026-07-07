@@ -149,9 +149,9 @@ def test_legacy_checkpoint_cannot_resume() -> None:
         validate_resume_config(config, {"format_version": 2, "config": config})
 
 
-def test_kaggle_vilt_config_requires_online_wandb() -> None:
+def test_kaggle_vilt_config_disables_online_wandb() -> None:
     config = load_config("configs/kaggle_vilt.yaml")
     assert config["model"]["name"] == "vilt"
-    assert config["tracking"]["wandb"]["enabled"] is True
-    assert config["tracking"]["wandb"]["required"] is True
+    assert config["tracking"]["wandb"]["enabled"] is False
+    assert config["tracking"]["wandb"]["required"] is False
     assert config["tracking"]["wandb"]["log_checkpoints"] is False

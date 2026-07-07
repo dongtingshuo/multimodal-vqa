@@ -62,8 +62,8 @@ runtime:
 
 tracking:
   wandb:
-    enabled: true
-    required: true
+    enabled: false
+    required: false
     project: multimodal-vqa
     entity: null
     tags:

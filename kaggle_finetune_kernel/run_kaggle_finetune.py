@@ -20,6 +20,7 @@ RESUME_ROOT = Path(
 )
 TORCH_VERSION = os.environ.get("TORCH_VERSION", "2.4.1+cu121")
 TORCHVISION_VERSION = os.environ.get("TORCHVISION_VERSION", "0.19.1+cu121")
+TRANSFORMERS_SPEC = os.environ.get("TRANSFORMERS_SPEC", "transformers>=4.40,<4.49")
 PYTORCH_INDEX_URL = os.environ.get("PYTORCH_INDEX_URL", "https://download.pytorch.org/whl/cu121")
 PYTORCH_RUNTIME_DIR = Path(
     os.environ.get("PYTORCH_RUNTIME_DIR", WORK_ROOT / "pytorch-runtime")
@@ -135,12 +136,11 @@ def install_training_dependencies():
             "-m",
             "pip",
             "install",
-            "transformers>=4.40",
+            TRANSFORMERS_SPEC,
             "Pillow>=10.0",
             "PyYAML>=6.0",
             "tqdm>=4.66",
             "matplotlib>=3.8",
-            "wandb>=0.17",
         ],
         cwd=REPO_ROOT,
     )
@@ -335,51 +335,6 @@ def normalize_vqa_data():
     return NORMALIZED_DATA_ROOT
 
 
-def load_wandb_api_key():
-    api_key = os.environ.get("WANDB_API_KEY", "").strip()
-    if not api_key:
-        from kaggle_secrets import UserSecretsClient
-
-        last_error = None
-        for attempt in range(1, 6):
-            try:
-                api_key = UserSecretsClient().get_secret("WANDB_API_KEY").strip()
-                if api_key:
-                    break
-            except Exception as error:
-                last_error = error
-                print(f"W&B Secret read attempt {attempt}/5 failed: {type(error).__name__}", flush=True)
-            time.sleep(min(5 * attempt, 20))
-        if not api_key:
-            print(
-                "W&B disabled: WANDB_API_KEY could not be read from Kaggle Secrets; "
-                f"training will continue without online tracking ({type(last_error).__name__}).",
-                flush=True,
-            )
-            return None
-    return api_key
-
-
-def configure_wandb(api_key):
-    if not api_key:
-        os.environ["WANDB_MODE"] = "disabled"
-        return False
-    os.environ["WANDB_API_KEY"] = api_key
-    os.environ["WANDB_MODE"] = "online"
-    os.environ.setdefault("WANDB_PROJECT", "multimodal-vqa")
-    import wandb
-
-    try:
-        if not wandb.login(key=api_key, relogin=True, verify=True):
-            raise RuntimeError("wandb.login returned False")
-    except Exception as error:
-        os.environ["WANDB_MODE"] = "disabled"
-        print(f"W&B disabled: authentication failed ({type(error).__name__}); training will continue.", flush=True)
-        return False
-    print(f"W&B authenticated; project={os.environ['WANDB_PROJECT']} mode=online", flush=True)
-    return True
-
-
 def run_official_evaluation(data_root):
     if not VQA_TOOLKIT_ROOT.is_dir():
         run(["git", "clone", "--depth", "1", "https://github.com/GT-Vision-Lab/VQA.git", VQA_TOOLKIT_ROOT])
@@ -426,8 +381,8 @@ def main():
     run(["git", "fetch", "--all", "--tags"], cwd=REPO_ROOT)
     run(["git", "checkout", GIT_REF], cwd=REPO_ROOT)
     install_training_dependencies()
-    wandb_api_key = load_wandb_api_key()
-    wandb_enabled = configure_wandb(wandb_api_key)
+    os.environ["WANDB_MODE"] = "disabled"
+    print("W&B disabled for Kaggle runs; using local CSV/PNG/JSON artifacts only.", flush=True)
     latest_checkpoint = restore_resume_artifacts()
     data_root = normalize_vqa_data()
 
@@ -458,21 +413,8 @@ def main():
         CHECKPOINT_DIR,
         "--epochs",
         TOTAL_EPOCHS,
+        "--no-wandb",
     ]
-    if wandb_enabled:
-        train_command.extend(
-            [
-                "--wandb",
-                "--wandb-project",
-                "multimodal-vqa",
-                "--wandb-tags",
-                "kaggle",
-                "vilt",
-                "coco2014-vqa",
-            ]
-        )
-    else:
-        train_command.append("--no-wandb")
     if latest_checkpoint is not None:
         train_command.extend(["--resume", latest_checkpoint])
 
