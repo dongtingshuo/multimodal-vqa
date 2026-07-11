@@ -4,9 +4,9 @@ This document describes the trained checkpoint used by this repository.
 
 本文档描述本仓库配套使用的已训练模型权重。
 
-This card covers the published `v0.1.0` checkpoint, two completed Kaggle cross-attention experiments, and the active ViLT continuation candidate. Only `v0.1.0` is a public Release asset. Internal candidates are not promoted until their training, prediction export, official VQA evaluation, and release gate are complete.
+This card covers the recommended `v0.2.0` staged cross-attention checkpoint, the archived `v0.1.0` checkpoint, the strong-model ablation, and the active ViLT continuation candidate. Internal ViLT results are not promoted until training, prediction export, official VQA evaluation, and the release gate are complete.
 
-本文档覆盖已发布的 `v0.1.0` 权重、两个已完成的 Kaggle cross-attention 实验，以及正在续训的 ViLT 候选模型。只有 `v0.1.0` 是公开 Release 附件；内部候选必须完成训练、预测导出、官方 VQA 评估和发布门槛后才能晋升。
+本文档覆盖推荐的 `v0.2.0` staged cross-attention 权重、历史 `v0.1.0` 权重、strong 模型消融实验，以及正在续训的 ViLT 候选模型。ViLT 内部结果必须完成训练、预测导出、官方 VQA 评估和发布门槛后才能晋升。
 
 The ViLT route has completed two full epochs and currently leads the internal metrics. Because the configured 10-epoch run was interrupted by Kaggle's runtime limit, the result is explicitly reported as partial and resumable rather than complete.
 
@@ -20,7 +20,7 @@ ViLT 路线已完成两个完整 epoch，目前内部指标领先。由于配置
 - **Internal targets / 内部目标**: hard accuracy `>= 0.55`, VQA score `>= 0.65`
 - **Tracking / 追踪**: local CSV, PNG, JSON, and format-v3 checkpoints; W&B is optional and disabled in the maintained Kaggle runner
 - **Current state / 当前状态**: epoch 2 completed; `latest.pt` resumes at epoch 3
-- **Promotion / 晋升**: retain the staged candidate as the recommended completed model until the ViLT run and official evaluation finish
+- **Promotion / 晋升**: retain the published staged checkpoint as recommended until the ViLT run and official evaluation finish
 
 The source checkpoint is intentionally not VQAv2-fine-tuned. This keeps comparison claims separate from task-specific checkpoint transfer.
 
@@ -30,9 +30,9 @@ The source checkpoint is intentionally not VQAv2-fine-tuned. This keeps comparis
 
 - **Task / 任务**: Visual Question Answering (VQA)
 - **Checkpoint / 权重文件**: `checkpoints/best.pt`
-- **Release / 发布页**: [v0.1.0](https://github.com/dongtingshuo/multimodal-vqa/releases/tag/v0.1.0)
-- **Checkpoint size / 权重大小**: 427,216,108 bytes
-- **SHA256**: `d9638309c2e74a30479332eaabb0f27869555d967eefae0a1eaf981342c3f98c`
+- **Release / 发布页**: [v0.2.0](https://github.com/dongtingshuo/multimodal-vqa/releases/tag/v0.2.0)
+- **Checkpoint size / 权重大小**: 660,441,108 bytes
+- **SHA256**: `15e15b4a0194b073a153331ad2c6b38ee39400d87e489bb6f0fc77d91e7cb22c`
 - **Model architecture / 模型结构**: ResNet-50 + DistilBERT + bidirectional cross attention + answer classifier
 - **Answer vocabulary / 答案词表**: Top-3000 normalized answers
 - **Input / 输入**: one RGB image and one English natural-language question
@@ -57,6 +57,7 @@ data:
   num_workers: 4
 
 model:
+  name: cross_attention
   text_model_name: distilbert-base-uncased
   hidden_dim: 512
   num_attention_heads: 8
@@ -65,11 +66,18 @@ model:
   pretrained_cnn: true
 
 train:
-  batch_size: 32
-  epochs: 10
+  batch_size: 16
+  epochs: 12
   lr: 0.0001
+  image_lr: 0.00001
+  text_lr: 0.000005
   weight_decay: 0.01
   grad_clip_norm: 1.0
+  gradient_accumulation_steps: 2
+  staged_finetuning: true
+  freeze_epochs: 2
+  unfreeze_image_blocks: 1
+  unfreeze_text_layers: 2
   use_amp: true
   pin_memory: true
   persistent_workers: true
@@ -99,7 +107,7 @@ data/
 
 ## Validation Metrics / 验证指标
 
-### Published v0.1.0 Checkpoint / 已发布 v0.1.0 权重
+### Archived v0.1.0 Checkpoint / 历史 v0.1.0 权重
 
 Checkpoint metadata:
 
@@ -119,14 +127,15 @@ This legacy checkpoint predates the runtime `vqa_score` and per-example BCE-loss
 
 该历史权重生成于当前 `vqa_score` 和按样本归一化 BCE loss 实现之前，其中保存的 loss 不应与新版训练代码输出直接比较。使用当前代码重新评估会输出 `vqa_score`、`top5_vqa_score`、硬标签准确率和新 loss 尺度。
 
-### Kaggle Fine-Tuning Candidate / Kaggle 微调候选权重
+### Published v0.2.0 Staged Fine-Tuning Checkpoint / 已发布 v0.2.0 分阶段微调权重
 
-Local artifact:
+Release and local artifact:
 
-本地文件：
+Release 与本地文件：
 
 ```text
-checkpoints/kaggle_finetune_best.pt
+Release: https://github.com/dongtingshuo/multimodal-vqa/releases/tag/v0.2.0
+Local: checkpoints/kaggle_finetune_best.pt
 ```
 
 Checkpoint size / 权重大小: `660,441,108` bytes
@@ -137,9 +146,9 @@ SHA256:
 15e15b4a0194b073a153331ad2c6b38ee39400d87e489bb6f0fc77d91e7cb22c
 ```
 
-Internal validation metrics from the completed Kaggle run:
+Internal validation metrics from the completed 12-epoch Kaggle run:
 
-Kaggle 完整运行得到的内部验证指标：
+Kaggle 完成 12 epoch 运行得到的内部验证指标：
 
 ```text
 epoch: 12
@@ -151,9 +160,9 @@ evaluated_examples: 209410
 exported_predictions: 214124
 ```
 
-This candidate was trained with VQA v2 labels and a public Kaggle COCO image source after filtering samples whose images were absent from that image source. The metrics above are project-internal validation metrics, not official VQA toolkit scores.
+This checkpoint was trained with VQA v2 labels and a public Kaggle COCO image source after filtering samples whose images were absent from that image source. It is the recommended stable project checkpoint. The metrics above are project-internal validation metrics, not official VQA toolkit scores.
 
-该候选权重使用 VQA v2 标签和公开 Kaggle COCO 图片源训练，并过滤了该图片源中缺失图片的样本。上述指标是项目内部验证指标，不是官方 VQA toolkit 分数。
+该权重使用 VQA v2 标签和公开 Kaggle COCO 图片源训练，并过滤了该图片源中缺失图片的样本，是当前推荐的稳定工程权重。上述指标是项目内部验证指标，不是官方 VQA toolkit 分数。
 
 ### Strong Cross-Attention Ablation / 强化交叉注意力消融实验
 
@@ -221,13 +230,13 @@ This model is intended for:
 - Questions should be written in English.
 - The model is not a general-purpose large vision-language model.
 - Performance depends on COCO/VQA-style image-question distributions.
-- The released checkpoint metadata records simplified Top-1 accuracy only; current evaluation adds VQA soft scores.
+- The archived v0.1.0 metadata records simplified Top-1 accuracy only; v0.2.0 includes hard accuracy and VQA soft scores.
 
 - 模型只能从固定 Top-3000 答案词表中预测答案。
 - 问题建议使用英文。
 - 该模型不是通用大规模视觉语言模型。
 - 模型表现依赖 COCO/VQA 风格的图像与问题分布。
-- 已发布 checkpoint 的元数据仅记录简化 Top-1 准确率；当前评估代码已增加 VQA soft score。
+- 历史 v0.1.0 元数据仅记录简化 Top-1 准确率；v0.2.0 已包含硬准确率和 VQA soft score。
 
 ## Distribution / 权重发布
 
@@ -243,7 +252,7 @@ The trained checkpoint is published as a verified GitHub Release asset while `ch
 python scripts/download_checkpoint.py
 ```
 
-[Direct download / 直接下载](https://github.com/dongtingshuo/multimodal-vqa/releases/download/v0.1.0/best.pt)
+[Direct download / 直接下载](https://github.com/dongtingshuo/multimodal-vqa/releases/download/v0.2.0/best.pt)
 
 ## Loading / 加载方式
 
@@ -264,9 +273,9 @@ python infer.py \
   --topk 5
 ```
 
-For the Kaggle fine-tuned candidate:
+For the original local copy of the released checkpoint:
 
-使用 Kaggle 微调候选权重：
+使用已发布权重的原始本地副本：
 
 ```bash
 python infer.py \

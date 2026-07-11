@@ -12,8 +12,8 @@ A research-oriented multimodal Visual Question Answering system with data prepar
 
 | Track | Status | Best internal hard accuracy | Best internal VQA score |
 | --- | --- | ---: | ---: |
-| Published ResNet-50 + DistilBERT checkpoint (`v0.1.0`) | Stable release / 稳定发布 | 0.4775 | Not recorded |
-| Staged cross-attention candidate | Completed, not released / 已完成，未发布 | 0.5239 | 0.6233 |
+| Staged cross-attention checkpoint (`v0.2.0`) | Stable release / 稳定发布 | **0.5239** | **0.6233** |
+| Legacy checkpoint (`v0.1.0`) | Archived release / 历史发布 | 0.4775 | Not recorded |
 | ViLT candidate, seed 42 | Training paused after epoch 2; resumable / 完成第 2 轮后暂停，可续训 | **0.5891** | **0.6879** |
 
 The ViLT candidate has passed both internal target thresholds, but it is not a released benchmark result. The 10-epoch run is incomplete, full prediction export and official VQA evaluation are still pending, and its checkpoint remains in private training artifacts.
@@ -169,16 +169,17 @@ The downloader resumes `.part` files and verifies known archive sizes, checksums
 
 ## Trained Checkpoint / 已训练模型
 
-Download and verify the published `v0.1.0` checkpoint / 下载并校验已发布的 `v0.1.0` 权重：
+Download and verify the recommended `v0.2.0` checkpoint / 下载并校验推荐的 `v0.2.0` 权重：
 
 ```bash
 python scripts/download_checkpoint.py
 ```
 
-- [GitHub Release](https://github.com/dongtingshuo/multimodal-vqa/releases/tag/v0.1.0)
-- [Direct checkpoint download / 权重直链](https://github.com/dongtingshuo/multimodal-vqa/releases/download/v0.1.0/best.pt)
-- SHA256: `d9638309c2e74a30479332eaabb0f27869555d967eefae0a1eaf981342c3f98c`
-- Size / 大小: `427,216,108` bytes
+- [GitHub Release](https://github.com/dongtingshuo/multimodal-vqa/releases/tag/v0.2.0)
+- [Direct checkpoint download / 权重直链](https://github.com/dongtingshuo/multimodal-vqa/releases/download/v0.2.0/best.pt)
+- SHA256: `15e15b4a0194b073a153331ad2c6b38ee39400d87e489bb6f0fc77d91e7cb22c`
+- Size / 大小: `660,441,108` bytes
+- Internal validation / 内部验证: hard accuracy `0.5239`, VQA score `0.6233`, Top-5 VQA score `0.8640`
 
 ## Training / 模型训练
 
@@ -371,6 +372,7 @@ outputs/
 - [Contributing / 贡献指南](CONTRIBUTING.md)
 - [Security Policy / 安全政策](SECURITY.md)
 - [Citation / 引用元数据](CITATION.cff)
+- [v0.2.0 Release Notes / v0.2.0 发布说明](docs/releases/v0.2.0.md)
 
 ## Development / 开发
 

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "multimodal-vqa"
-version = "0.1.0"
+version = "0.2.0"
 description = "A multimodal Visual Question Answering pipeline with training, evaluation, inference, and Gradio demo support."
 readme = "README.md"
 requires-python = ">=3.9"

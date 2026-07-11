@@ -10,9 +10,9 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from vqa_project.downloads import download_file
 
-DEFAULT_URL = "https://github.com/dongtingshuo/multimodal-vqa/releases/download/v0.1.0/best.pt"
-DEFAULT_SHA256 = "d9638309c2e74a30479332eaabb0f27869555d967eefae0a1eaf981342c3f98c"
-DEFAULT_SIZE = 427216108
+DEFAULT_URL = "https://github.com/dongtingshuo/multimodal-vqa/releases/download/v0.2.0/best.pt"
+DEFAULT_SHA256 = "15e15b4a0194b073a153331ad2c6b38ee39400d87e489bb6f0fc77d91e7cb22c"
+DEFAULT_SIZE = 660441108
 
 
 def parse_args() -> argparse.Namespace:

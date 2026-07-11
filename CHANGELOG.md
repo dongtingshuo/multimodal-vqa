@@ -2,7 +2,18 @@
 
 ## Unreleased / 未发布
 
+No unreleased changes. / 暂无未发布变更。
+
+## 0.2.0 / Staged Cross-Attention Model Release
+
+Released on 2026-07-11. / 发布于 2026-07-11。
+
 ### Added / 新增
+
+- Published the completed 12-epoch staged cross-attention checkpoint with verified size and SHA256 checksum.
+- 发布完成 12 epoch 训练的 staged cross-attention checkpoint，并提供文件大小与 SHA256 校验。
+- Updated the default checkpoint downloader, model card, citation metadata, and release documentation for `v0.2.0`.
+- 将默认权重下载器、模型卡、引用元数据和发布文档更新至 `v0.2.0`。
 
 - ViLT seed-42 partial-run results, continuation status, and release-gate distinctions across the README, model card, experiment report, and training protocol.
 - 在 README、模型卡、实验报告和训练协议中补充 ViLT seed 42 部分训练结果、续训状态与发布门槛说明。
