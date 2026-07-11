@@ -1,0 +1,77 @@
+seed: 42
+device: cuda
+
+data:
+  root: /root/autodl-tmp/multimodal-vqa-autodl/data/vqa
+  train_split: train
+  val_split: val
+  answer_vocab_path: /root/autodl-tmp/multimodal-vqa-autodl/answer_vocab.json
+  answer_vocab_size: 3000
+  max_train_samples: null
+  max_val_samples: null
+  image_size: 384
+  max_question_length: 40
+  processor_name: dandelin/vilt-b32-finetuned-vqa
+  num_workers: 8
+  augmentation:
+    enabled: false
+
+model:
+  name: vilt
+  pretrained_model_name: dandelin/vilt-b32-mlm-itm
+  dropout: 0.1
+  freeze_backbones: false
+  gradient_checkpointing: true
+  trainable_layers: 12
+
+train:
+  batch_size: 4
+  epochs: 10
+  lr: 0.0001
+  backbone_lr: 0.00002
+  head_lr: 0.0001
+  weight_decay: 0.01
+  grad_clip_norm: 1.0
+  gradient_accumulation_steps: 8
+  staged_finetuning: false
+  trainable_vilt_layers: 12
+  use_amp: true
+  pin_memory: true
+  persistent_workers: true
+  checkpoint_dir: /root/autodl-tmp/multimodal-vqa-autodl/runs/vilt-seed42
+  checkpoint_name: best.pt
+  latest_checkpoint_name: latest.pt
+  log_every: 100
+  selection_metric: vqa_score
+  use_scheduler: true
+  scheduler: warmup_plateau
+  scheduler_factor: 0.5
+  scheduler_patience: 1
+  warmup_ratio: 0.05
+  backbone_min_lr: 0.000001
+  head_min_lr: 0.000005
+  label_smoothing: 0.0
+  early_stopping_start_epoch: 3
+  early_stopping_patience: 2
+  early_stopping_min_delta: 0.002
+
+runtime:
+  run_dir: /root/autodl-tmp/multimodal-vqa-autodl/runs
+  run_name: autodl-vilt-seed42
+  use_run_dir: false
+
+tracking:
+  wandb:
+    enabled: false
+    required: false
+    project: multimodal-vqa
+    entity: null
+    tags:
+      - autodl
+      - rtx4090d
+      - vilt
+      - seed42
+    log_checkpoints: false
+
+infer:
+  topk: 5

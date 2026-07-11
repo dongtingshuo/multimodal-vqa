@@ -41,12 +41,12 @@ VQA_ZIPS = {
 
 COCO_ZIPS = {
     "train2014": {
-        "url": "http://images.cocodataset.org/zips/train2014.zip",
+        "url": "https://images.cocodataset.org/zips/train2014.zip",
         "checksum": "md5:0da8c0bd3d6becc4dcb32757491aca88",
         "size": 13510573713,
     },
     "val2014": {
-        "url": "http://images.cocodataset.org/zips/val2014.zip",
+        "url": "https://images.cocodataset.org/zips/val2014.zip",
         "checksum": "md5:a3d79f5ed8d289b7a7554ce06a5782b3",
         "size": 6645013297,
     },
@@ -57,7 +57,7 @@ EXPECTED_COCO_IMAGE_COUNTS = {
     "val2014": 40504,
 }
 
-COCO_IMAGE_URL = "http://images.cocodataset.org/{split}/{filename}"
+COCO_IMAGE_URL = "https://images.cocodataset.org/{split}/{filename}"
 
 
 def extract_zip(zip_path: Path, output_dir: Path) -> None:

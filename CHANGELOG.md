@@ -2,7 +2,10 @@
 
 ## Unreleased / 未发布
 
-No unreleased changes. / 暂无未发布变更。
+### Added / 新增
+
+- Added a single-GPU AutoDL continuation workflow for RTX 4090D/4090 instances, including environment setup, official data download and validation, format-v3 checkpoint preflight, background training, monitoring, evaluation, and artifact packaging.
+- 增加面向 RTX 4090D/4090 单卡实例的 AutoDL 续训流程，覆盖环境安装、官方数据下载与校验、format-v3 checkpoint 预检、后台训练、状态监控、评估与产物归档。
 
 ## 0.2.0 / Staged Cross-Attention Model Release
 

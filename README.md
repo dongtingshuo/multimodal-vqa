@@ -58,6 +58,7 @@ ViLT 候选模型已通过两个内部目标门槛，但尚不是正式发布的
 │   └── demo_cpu.yaml         # Lightweight smoke-test config / 轻量级 CPU 测试配置
 ├── examples/
 │   └── toy_vqa_demo/         # Tiny public workflow sample / 极小公开流程样例
+├── autodl/                    # RTX 4090D continuation workflow / AutoDL 续训流程
 ├── notebooks/
 │   └── kaggle_train.ipynb    # Reproducible Kaggle workflow / 可复现 Kaggle 流程
 ├── scripts/
@@ -365,6 +366,7 @@ outputs/
 - [Experiment Report / 实验报告](docs/EXPERIMENT_REPORT.md)
 - [Training Protocol / 训练协议](docs/TRAINING_PROTOCOL.md)
 - [Kaggle Training / Kaggle 训练](docs/KAGGLE.md)
+- [AutoDL Continuation / AutoDL 续训](autodl/README.md)
 - [Troubleshooting / 故障排查](docs/TROUBLESHOOTING.md)
 - [Toy Demo / 玩具演示](examples/toy_vqa_demo/README.md)
 - [Model Card / 模型说明](MODEL_CARD.md)
