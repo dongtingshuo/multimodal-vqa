@@ -4,13 +4,13 @@ This document describes the trained checkpoint used by this repository.
 
 本文档描述本仓库配套使用的已训练模型权重。
 
-This card currently covers the published `v0.1.0` checkpoint and the locally available Kaggle fine-tuning candidate. The Kaggle candidate has internal validation metrics, but it is not yet promoted as a release checkpoint until the official VQA evaluation and release gate are completed.
+This card covers the published `v0.1.0` checkpoint, two completed Kaggle cross-attention experiments, and the active ViLT continuation candidate. Only `v0.1.0` is a public Release asset. Internal candidates are not promoted until their training, prediction export, official VQA evaluation, and release gate are complete.
 
-本文档当前覆盖已发布的 `v0.1.0` 权重和本地可用的 Kaggle 微调候选权重。Kaggle 候选权重已有内部验证指标，但在完成官方 VQA 评估和发布门槛前，尚未晋升为正式发布权重。
+本文档覆盖已发布的 `v0.1.0` 权重、两个已完成的 Kaggle cross-attention 实验，以及正在续训的 ViLT 候选模型。只有 `v0.1.0` 是公开 Release 附件；内部候选必须完成训练、预测导出、官方 VQA 评估和发布门槛后才能晋升。
 
-The repository also contains an experimental ViLT training route. It is not listed as a trained model result until its Kaggle run, complete prediction export, and official evaluation finish.
+The ViLT route has completed two full epochs and currently leads the internal metrics. Because the configured 10-epoch run was interrupted by Kaggle's runtime limit, the result is explicitly reported as partial and resumable rather than complete.
 
-仓库同时提供实验性 ViLT 训练路线。在 Kaggle 训练、完整预测导出和官方评估完成前，不将其列为已训练模型结果。
+ViLT 路线已完成两个完整 epoch，目前内部指标领先。由于配置的 10 epoch 任务受 Kaggle 最长运行时间中断，该结果明确标记为“部分完成、可续训”，而不是完整训练结果。
 
 ## Active Candidate Protocol / 当前候选协议
 
@@ -18,8 +18,9 @@ The repository also contains an experimental ViLT training route. It is not list
 - **Config / 配置**: `configs/kaggle_vilt.yaml`
 - **Data gate / 数据门槛**: 443,757 train questions and 214,354 validation questions; missing mirror images are repaired, not filtered
 - **Internal targets / 内部目标**: hard accuracy `>= 0.55`, VQA score `>= 0.65`
-- **Tracking / 追踪**: required online W&B metrics; model files remain in Kaggle artifacts
-- **Promotion / 晋升**: retain `checkpoints/kaggle_finetune_best.pt` until both internal gates and official evaluation are verified
+- **Tracking / 追踪**: local CSV, PNG, JSON, and format-v3 checkpoints; W&B is optional and disabled in the maintained Kaggle runner
+- **Current state / 当前状态**: epoch 2 completed; `latest.pt` resumes at epoch 3
+- **Promotion / 晋升**: retain the staged candidate as the recommended completed model until the ViLT run and official evaluation finish
 
 The source checkpoint is intentionally not VQAv2-fine-tuned. This keeps comparison claims separate from task-specific checkpoint transfer.
 
@@ -187,6 +188,21 @@ recommended checkpoint. It remains available for reproducibility and architectur
 
 该消融实验的表现低于分阶段微调候选模型，因此不作为推荐 checkpoint，
 仅用于可复现性与模型架构对比。
+
+### ViLT Continuation Candidate / ViLT 续训候选模型
+
+The current private Kaggle checkpoint is a format-v3 continuation artifact from the seed-42 run. It completed two epochs before the Kaggle session ended. Both `best.pt` and `latest.pt` record epoch 2; `latest.pt` also preserves optimizer, scheduler, AMP scaler, RNG, history, and global-step state for continuation from epoch 3.
+
+当前私有 Kaggle checkpoint 来自 seed 42 的 format-v3 续训任务。Kaggle 会话结束前完成了两个 epoch；`best.pt` 与 `latest.pt` 均记录 epoch 2，其中 `latest.pt` 还保存优化器、调度器、AMP scaler、随机状态、历史和 global step，可从 epoch 3 继续。
+
+| Epoch | Validation loss | Hard accuracy | VQA score | Top-5 VQA score |
+| ---: | ---: | ---: | ---: | ---: |
+| 1 | 3.8765 | 0.5395 | 0.6368 | 0.8519 |
+| 2 | **3.4327** | **0.5891** | **0.6879** | **0.8832** |
+
+These are project-internal validation metrics from a partial run. They pass the internal `0.55 / 0.65` gates, but they are not official VQA toolkit scores and must not be compared as a finished benchmark until the remaining epochs, prediction export, and official evaluation complete.
+
+以上是部分训练任务的项目内部验证指标，已通过 `0.55 / 0.65` 内部门槛，但并非官方 VQA toolkit 分数。在剩余 epoch、预测导出和官方评估完成前，不应将其作为完整 benchmark 结果比较。
 
 ## Intended Use / 预期用途
 

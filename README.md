@@ -8,6 +8,18 @@
 
 A research-oriented multimodal Visual Question Answering system with data preparation, model training, evaluation, command-line inference, a Gradio web demo, model-variant comparison, and error analysis. The default workflow targets VQA v2.0 with COCO 2014 images.
 
+## Project Status / 项目状态
+
+| Track | Status | Best internal hard accuracy | Best internal VQA score |
+| --- | --- | ---: | ---: |
+| Published ResNet-50 + DistilBERT checkpoint (`v0.1.0`) | Stable release / 稳定发布 | 0.4775 | Not recorded |
+| Staged cross-attention candidate | Completed, not released / 已完成，未发布 | 0.5239 | 0.6233 |
+| ViLT candidate, seed 42 | Training paused after epoch 2; resumable / 完成第 2 轮后暂停，可续训 | **0.5891** | **0.6879** |
+
+The ViLT candidate has passed both internal target thresholds, but it is not a released benchmark result. The 10-epoch run is incomplete, full prediction export and official VQA evaluation are still pending, and its checkpoint remains in private training artifacts.
+
+ViLT 候选模型已通过两个内部目标门槛，但尚不是正式发布的 benchmark 结果。当前 10 epoch 训练只完成 2 个完整 epoch，完整预测导出与官方 VQA 评估仍未完成，checkpoint 暂存于私有训练产物中。
+
 ## Core Capabilities / 核心能力
 
 - **Multimodal architecture / 多模态架构**: ViLT joint vision-language transformer plus the established ResNet-50/DistilBERT cross-attention family.
@@ -230,6 +242,10 @@ Kaggle runs use local artifacts for experiment tracking by default: `training_hi
 
 Kaggle 训练默认使用本地产物记录实验：`training_history.csv`、`training_curves.png`、
 `run_metadata.json` 和 `run_summary.json`。
+
+W&B integration remains available as an optional dependency for custom runs, but the maintained Kaggle workflow does not require W&B credentials and currently runs with `--no-wandb`.
+
+W&B 仍作为自定义实验的可选依赖保留，但维护中的 Kaggle 流程不需要 W&B 凭据，当前固定使用 `--no-wandb`。
 
 Resume a format-v3 run / 继续 format-v3 训练：
 

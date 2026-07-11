@@ -1,0 +1,41 @@
+name: Experiment proposal / 实验建议
+description: Propose a controlled model, data, training, or evaluation experiment.
+title: "[Experiment]: "
+labels: ["experiment"]
+body:
+  - type: textarea
+    id: hypothesis
+    attributes:
+      label: Hypothesis / 假设
+      description: State the expected effect and why it should occur.
+    validations:
+      required: true
+  - type: textarea
+    id: baseline
+    attributes:
+      label: Baseline / 对照基线
+      description: Name the config, checkpoint, commit, data split, and current metrics.
+    validations:
+      required: true
+  - type: textarea
+    id: change
+    attributes:
+      label: Single controlled change / 单一受控变量
+      description: Describe the one variable that changes and everything held fixed.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria / 验收标准
+      description: Define metrics, repeat count, official evaluation needs, and promotion threshold.
+    validations:
+      required: true
+  - type: textarea
+    id: resources
+    attributes:
+      label: Compute and artifacts / 算力与产物
+      description: Estimate hardware/runtime and list checkpoints, histories, predictions, and reports to retain.
+    validations:
+      required: true
+

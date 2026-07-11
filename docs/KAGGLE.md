@@ -83,6 +83,14 @@ interrupted partial epoch is repeated.
 `/kaggle/working`，并自动续训。Kaggle checkpoint 按 epoch 边界保存，因此中断时
 未完成的 epoch 会重新训练。
 
+The current private resume Dataset is `dongtingshuo/multimodal-vqa-vilt-resume`. Its
+format-v3 `latest.pt` records epoch 2 and resumes at epoch 3. Attaching the Dataset does not
+start a run; a new kernel version must still be submitted explicitly.
+
+当前私有续训 Dataset 为 `dongtingshuo/multimodal-vqa-vilt-resume`，其中 format-v3
+`latest.pt` 记录 epoch 2，续训将从 epoch 3 开始。挂载该 Dataset 本身不会启动任务，
+仍需显式提交新的 kernel version。
+
 ```bash
 python train.py \
   --config configs/kaggle_vilt.yaml \

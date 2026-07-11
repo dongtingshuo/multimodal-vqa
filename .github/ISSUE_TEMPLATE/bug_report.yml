@@ -1,0 +1,54 @@
+name: Bug report / 问题报告
+description: Report a reproducible runtime, data, training, evaluation, or demo defect.
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please remove credentials, private dataset paths, and large checkpoint contents before submitting.
+        提交前请移除凭据、私有数据路径和大型 checkpoint 内容。
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area / 模块
+      options:
+        - Data preparation / 数据准备
+        - Training or resume / 训练或续训
+        - Evaluation / 评估
+        - Inference or Gradio demo / 推理或演示
+        - Kaggle workflow / Kaggle 流程
+        - Documentation / 文档
+        - Other / 其他
+    validations:
+      required: true
+  - type: textarea
+    id: description
+    attributes:
+      label: Problem / 问题描述
+      description: Describe the observed behavior and what you expected instead.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Reproduction / 复现步骤
+      description: Include the exact command, config, and minimal steps.
+      render: shell
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment / 环境
+      description: OS, Python, PyTorch, CUDA, GPU, and relevant package versions.
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs / 日志
+      description: Paste the smallest relevant traceback or metric excerpt.
+      render: text
+

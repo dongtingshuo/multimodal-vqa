@@ -4,6 +4,11 @@
 
 ### Added / 新增
 
+- ViLT seed-42 partial-run results, continuation status, and release-gate distinctions across the README, model card, experiment report, and training protocol.
+- 在 README、模型卡、实验报告和训练协议中补充 ViLT seed 42 部分训练结果、续训状态与发布门槛说明。
+- GitHub issue forms and pull-request template for reproducible bug reports, experiment proposals, and reviewable contributions.
+- 增加 GitHub Issue 表单和 Pull Request 模板，用于可复现问题报告、实验建议与规范贡献。
+
 - Unified CPU, CUDA, MPS, and Kaggle execution controls with command-line path and sample overrides.
 - 增加统一的 CPU、CUDA、MPS 与 Kaggle 执行控制，以及命令行路径和样本数覆盖参数。
 - Controlled frozen-baseline and staged partial fine-tuning configs with differential learning rates, gradient accumulation, and early stopping.

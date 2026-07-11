@@ -10,10 +10,10 @@ This project implements a classification-based Visual Question Answering pipelin
 Image + Question
       |
       v
-COCO image transform + tokenizer
+Variant-specific image processor + tokenizer
       |
       v
-ResNet-50 image encoder + DistilBERT text encoder
+ResNet-50 + DistilBERT, or joint ViLT encoder
       |
       v
 Linear projections to shared hidden dimension
@@ -52,6 +52,14 @@ The question is tokenized with a Hugging Face tokenizer and encoded by DistilBER
 - `image_only`: image encoder plus classifier / 图像编码器加分类器
 - `baseline_concat`: pooled image and text features concatenated before classification / 池化图像与文本特征拼接后分类
 - `cross_attention`: bidirectional cross-modal attention before classification / 分类前进行双向跨模态注意力融合
+- `strong_cross_attention`: gated attention pooling, residual normalization, and a deeper fusion classifier / 门控注意力池化、残差归一化与更深融合分类头
+- `vilt`: jointly pretrained patch-and-text transformer with a Top-K VQA classifier / 联合预训练的图像 patch 与文本 Transformer，加 Top-K VQA 分类器
+
+### ViLT Path / ViLT 路径
+
+The ViLT variant uses `dandelin/vilt-b32-mlm-itm` as a generic image-text pretrained backbone and initializes a new Top-3000 answer classifier. The processor supplies pixel tensors, masks, token IDs, and attention masks. Gradient checkpointing and differential learning rates make full-backbone fine-tuning practical on Kaggle GPUs.
+
+ViLT 变体使用 `dandelin/vilt-b32-mlm-itm` 作为通用图文预训练 backbone，并新建 Top-3000 答案分类器。processor 提供图像张量、图像 mask、token ID 与 attention mask；gradient checkpointing 和差分学习率用于在 Kaggle GPU 上完成全 backbone 微调。
 
 ### Cross Attention Fusion / 交叉注意力融合
 
@@ -122,7 +130,7 @@ Each run also writes `training_history.csv`, `training_curves.png`, and `run_met
 
 The project exposes four runtime surfaces:
 
-工程提供三个运行入口：
+工程提供四个运行入口：
 
 - `infer.py`: command-line single-image inference / 命令行单图推理
 - `evaluate.py`: validation evaluation / 验证集评估
