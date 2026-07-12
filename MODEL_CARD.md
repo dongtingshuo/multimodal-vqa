@@ -107,22 +107,31 @@ VQA score `0.8908`, and loss `3.5019`.
 
 ## Evaluation Scope / 评估范围
 
-These are complete project-internal validation metrics, not an official VQA leaderboard score.
-The official toolkit adapter is included in the repository and the full prediction export is
-preserved, but official toolkit execution is still pending. No leaderboard or cross-project
-state-of-the-art claim is made.
+The official VQA Evaluation Toolkit reports `68.42` overall on all 214,354 VQA v2 validation
+questions, with `85.88` yes/no, `60.40` other, and `48.54` number accuracy. The evaluation uses
+official repository commit `a013f004` and the public validation annotations. Full provenance and
+input hashes are recorded in
+[`docs/evaluation/v0.3.0-official-vqa.md`](docs/evaluation/v0.3.0-official-vqa.md).
 
-以上是完整的项目内部验证指标，不是官方 VQA leaderboard 分数。仓库已提供官方 toolkit
-适配器并保留完整预测文件，但官方 toolkit 尚未执行。因此不作 leaderboard 或跨项目 SOTA 声明。
+官方 VQA Evaluation Toolkit 在全部 214,354 条 VQA v2 验证问题上的 overall 为 `68.42`，
+其中 yes/no `85.88`、other `60.40`、number `48.54`。评测使用官方仓库 commit `a013f004`
+和公开验证标注；完整溯源与输入哈希见
+[`docs/evaluation/v0.3.0-official-vqa.md`](docs/evaluation/v0.3.0-official-vqa.md)。
+
+This is an official-protocol local validation result, not a test-dev/test-standard server
+submission. No leaderboard or cross-project state-of-the-art claim is made.
+
+这是采用官方协议的本地验证结果，不是 test-dev/test-standard 服务器提交成绩；不作
+leaderboard 或跨项目 SOTA 声明。
 
 ## Comparison / 对比
 
-| Checkpoint | Hard accuracy | Internal VQA | Status |
-| --- | ---: | ---: | --- |
-| ViLT seed 42 (`v0.3.0`) | **0.6126** | **0.7101** | Recommended engineering checkpoint |
-| Staged cross-attention (`v0.2.0`) | 0.5239 | 0.6233 | Archived comparison release |
-| Strong cross-attention ablation | 0.4967 | 0.5955 | Not promoted |
-| Legacy checkpoint (`v0.1.0`) | 0.4775 | not recorded | Archived |
+| Checkpoint | Hard accuracy | Internal VQA | Official VQA val (%) | Status |
+| --- | ---: | ---: | ---: | --- |
+| ViLT seed 42 (`v0.3.0`) | **0.6126** | **0.7101** | **68.42** | Recommended engineering checkpoint |
+| Staged cross-attention (`v0.2.0`) | 0.5239 | 0.6233 | not evaluated | Archived comparison release |
+| Strong cross-attention ablation | 0.4967 | 0.5955 | not evaluated | Not promoted |
+| Legacy checkpoint (`v0.1.0`) | 0.4775 | not recorded | not evaluated | Archived |
 
 ## Runtime Requirements / 运行要求
 
@@ -144,13 +153,13 @@ python demo.py --checkpoint checkpoints/best.pt
 - The default language path expects English questions.
 - COCO/VQA domain bias and annotation bias remain present.
 - Confidence values are classifier scores and are not calibrated guarantees.
-- Official VQA toolkit parity has not yet been asserted.
+- The `68.42` score is validation-set evaluation, not a held-out evaluation-server result.
 
 - 固定 Top-3000 答案词表无法覆盖所有有效答案。
 - 默认语言路径面向英文问题。
 - 仍存在 COCO/VQA 数据域与标注偏差。
 - 置信度是分类器分数，不是经过校准的保证。
-- 尚未声明与官方 VQA toolkit 指标完全一致。
+- `68.42` 是验证集评测结果，不是隐藏测试集评测服务器成绩。
 
 ## Security / 安全
 

@@ -24,8 +24,10 @@ Released on 2026-07-12. / 发布于 2026-07-12。
 
 ### Evaluation Scope / 评估范围
 
-- Metrics are complete project-internal VQA v2 validation results. Official VQA toolkit evaluation remains pending and no leaderboard claim is made.
-- 指标为完整的项目内部 VQA v2 验证结果；官方 VQA toolkit 评估仍待补充，不作 leaderboard 声明。
+- Added official VQA v2 validation evaluation: `68.42` overall, `85.88` yes/no, `60.40` other, and `48.54` number.
+- 增加官方 VQA v2 验证评测：overall `68.42`、yes/no `85.88`、other `60.40`、number `48.54`。
+- Added evaluation provenance, input hashes, a Python 3 toolkit preparation utility, and Kaggle integration. The result is not a test-dev/test-standard leaderboard submission.
+- 增加评测溯源、输入哈希、Python 3 toolkit 准备工具与 Kaggle 集成；该结果不是 test-dev/test-standard leaderboard 提交成绩。
 
 ## 0.2.0 / Staged Cross-Attention Model Release
 

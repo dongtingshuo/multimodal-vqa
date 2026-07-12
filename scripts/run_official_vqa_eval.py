@@ -25,8 +25,14 @@ def load_toolkit(toolkit_root: str | Path):
             "Expected PythonHelperTools and PythonEvaluationTools under the official VQA toolkit root."
         )
     sys.path[:0] = [str(helper_path), str(evaluation_path)]
-    from vqaEvaluation.vqaEval import VQAEval
-    from vqaTools.vqa import VQA
+    try:
+        from vqaEvaluation.vqaEval import VQAEval
+        from vqaTools.vqa import VQA
+    except (SyntaxError, TabError) as exc:
+        raise RuntimeError(
+            "The official toolkit source is Python 2 only. Run "
+            "scripts/prepare_official_vqa_toolkit.py before evaluation."
+        ) from exc
 
     return VQA, VQAEval
 

@@ -111,9 +111,27 @@ The output includes loss, hard Top-1 accuracy, VQA soft score, and Top-5 VQA sco
 
 输出包含 loss、硬标签 Top-1 准确率、VQA soft score 和 Top-5 VQA score。
 
-For benchmark reporting, pass the exported predictions through `scripts/run_official_vqa_eval.py` and the official VQA toolkit.
+For official-protocol validation reporting, prepare the official Python 2 toolkit for Python 3,
+then evaluate the complete prediction export:
 
-正式 benchmark 报告应将导出的预测结果交给 `scripts/run_official_vqa_eval.py` 和官方 VQA toolkit。
+正式协议验证应先将官方 Python 2 toolkit 准备为 Python 3 兼容版本，再评测完整预测文件：
+
+```bash
+git clone --depth 1 https://github.com/GT-Vision-Lab/VQA.git /tmp/VQA
+python scripts/prepare_official_vqa_toolkit.py --toolkit-root /tmp/VQA
+python scripts/run_official_vqa_eval.py \
+  --toolkit-root /tmp/VQA \
+  --questions data/vqa/v2_OpenEnded_mscoco_val2014_questions.json \
+  --annotations data/vqa/v2_mscoco_val2014_annotations.json \
+  --predictions outputs/val_predictions.json \
+  --output outputs/official_vqa_metrics.json
+```
+
+The released v0.3.0 result is `68.42` on VQA v2 validation. This is not a test-dev/test-standard
+evaluation-server submission.
+
+v0.3.0 发布模型在 VQA v2 validation 上的官方协议得分为 `68.42`；这不是 test-dev/test-standard
+评测服务器提交成绩。
 
 When prediction export is enabled, every validation question is retained in the JSON. Internal metrics continue to exclude examples whose annotated answers are outside the configured answer vocabulary.
 

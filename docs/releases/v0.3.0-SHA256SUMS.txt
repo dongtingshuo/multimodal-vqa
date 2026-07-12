@@ -1,2 +1,3 @@
 0cce251f02a7b5349b90c0a6e41850168cc01a700f36fe03663887bae7dbf213  best.pt
 a05a65a2a855e4978b7d6ca2ca5439a517ce8a3c9792d49022c4e2ace62df1ca  vilt-seed42-evaluation-artifacts.tar.gz
+7f0167c62d15dac7bf637422bf20ab449b33efaa9f38400ffca29aaa9fddd4df  official_vqa_metrics.json

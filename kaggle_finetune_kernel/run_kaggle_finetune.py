@@ -341,6 +341,15 @@ def run_official_evaluation(data_root):
     run(
         [
             "python",
+            "scripts/prepare_official_vqa_toolkit.py",
+            "--toolkit-root",
+            VQA_TOOLKIT_ROOT,
+        ],
+        cwd=REPO_ROOT,
+    )
+    run(
+        [
+            "python",
             "scripts/run_official_vqa_eval.py",
             "--toolkit-root",
             VQA_TOOLKIT_ROOT,

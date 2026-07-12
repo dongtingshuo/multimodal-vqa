@@ -118,19 +118,19 @@ operational sessions, not independent model results.
 strong 模型实验：第 12 版暴露续训问题，第 13 版完成训练，第 14 版完成预测导出与归档。
 它们是运行会话，不是独立的模型结果。
 
-| Version | Best epoch | Validation hard accuracy | Validation VQA score | Change from previous | Decision |
+| Version | Best epoch | Hard accuracy | Internal VQA | Official VQA val (%) | Decision |
 | --- | ---: | ---: | ---: | ---: | --- |
-| Published legacy checkpoint | 10 | 0.4775 | Not recorded | Reference | Historical baseline |
-| Staged `cross_attention` | 12 | 0.5239 | 0.6233 | +0.0464 hard accuracy | Archived comparison release |
-| `strong_cross_attention` | 22 | 0.4967 | 0.5955 | -0.0272 hard accuracy, -0.0278 VQA | Not promoted |
-| ViLT seed 42 | 5 | **0.6126** | **0.7101** | +0.0887 hard accuracy, +0.0868 VQA vs staged | Recommended engineering checkpoint |
+| Published legacy checkpoint | 10 | 0.4775 | Not recorded | Not evaluated | Historical baseline |
+| Staged `cross_attention` | 12 | 0.5239 | 0.6233 | Not evaluated | Archived comparison release |
+| `strong_cross_attention` | 22 | 0.4967 | 0.5955 | Not evaluated | Not promoted |
+| ViLT seed 42 | 5 | **0.6126** | **0.7101** | **68.42** | Recommended engineering checkpoint |
 
 The ViLT run completed through epoch 7, stopped under the configured early-stopping rule, and
-exported one prediction for every validation question. Its metrics are complete project-internal
-results; official VQA toolkit evaluation remains pending.
+exported one prediction for every validation question. Official repository commit `a013f004`
+evaluated the complete export at `68.42` overall on the public VQA v2 validation annotations.
 
-ViLT 任务已完成至 epoch 7，并按配置触发早停，同时为每条验证问题导出一条预测。当前指标是完整
-项目内部结果；官方 VQA toolkit 评估仍待补充。
+ViLT 任务已完成至 epoch 7，并按配置触发早停，同时为每条验证问题导出一条预测。官方仓库
+commit `a013f004` 在公开 VQA v2 验证标注上对完整预测评测，overall 为 `68.42`。
 
 | Version | Training config | Training Git commit | Local checkpoint |
 | --- | --- | --- | --- |
@@ -392,17 +392,19 @@ patience=2 的早停正确阻止了进一步过拟合。最终导出包含 214,3
 验证 questions 和 annotations 完全一致。
 
 **Decision.** Publish as the recommended engineering checkpoint because it completed the fixed
-stopping protocol and exceeds the staged release by `0.0887` hard accuracy and `0.0868` internal
-VQA score. Keep official toolkit evaluation pending and make no leaderboard claim.
+stopping protocol, exceeds the staged release by `0.0887` hard accuracy and `0.0868` internal
+VQA score, and records `68.42` under the official validation protocol. This is not a
+test-dev/test-standard leaderboard submission.
 
 **决策。** 该任务完成固定停止协议，并相比分阶段发布将硬准确率提高 `0.0887`、内部 VQA score
-提高 `0.0868`，因此发布为推荐工程 checkpoint。官方 toolkit 评估保持待补，不作 leaderboard 声明。
+提高 `0.0868`，且官方验证协议得分为 `68.42`，因此发布为推荐工程 checkpoint。该结果不是
+test-dev/test-standard leaderboard 提交成绩。
 
 ## Current Limitations / 当前限制
 
 - The answer space is a fixed Top-K vocabulary.
 - Questions are expected to be English in the default tokenizer setup.
-- Official evaluation-toolkit parity is not yet asserted because answer normalization and submission formatting may differ.
+- Official validation scoring is complete; held-out test-server performance is not measured.
 - Toy reports are workflow checks, not benchmark evidence.
 - Small sample results are unstable and should be treated as smoke-test outputs.
 - Pretrained model cache availability may affect local full-model runs.
@@ -410,7 +412,7 @@ VQA score. Keep official toolkit evaluation pending and make no leaderboard clai
 
 - 答案空间是固定 Top-K 词表。
 - 默认 tokenizer 设置下，问题建议使用英文。
-- 目前不声称与官方评估工具完全一致，因为答案归一化和提交格式可能存在差异。
+- 官方验证评分已完成；尚未评测隐藏测试集服务器表现。
 - 玩具报告是流程检查，不是 benchmark 证据。
 - 小样本结果不稳定，应作为连通性检查输出看待。
 - 预训练模型缓存可用性可能影响本地完整模型运行。
@@ -418,7 +420,7 @@ VQA score. Keep official toolkit evaluation pending and make no leaderboard clai
 
 ## Future Work / 后续工作
 
-- Run the official VQA evaluator on the completed 214,354-record prediction export.
+- Submit a future selected model to test-dev only when a competition-server comparison is required.
 - Repeat the selected ViLT protocol with an additional seed before making stability claims.
 - Add repeated-run experiment summaries with confidence intervals.
 - Add richer question taxonomy and manual review fields.
@@ -427,7 +429,7 @@ VQA score. Keep official toolkit evaluation pending and make no leaderboard clai
 - Review persisted run artifacts after each full training run.
 - Add additional vision and text backbone choices behind the same model factory.
 
-- 对已完成的 214,354 条预测运行官方 VQA evaluator。
+- 仅在需要竞赛服务器对比时，将后续选定模型提交至 test-dev。
 - 使用额外随机种子重复最佳 ViLT 协议后，再作稳定性结论。
 - 增加多次运行的实验汇总和置信区间。
 - 增加更细的问题类型体系和人工复核字段。

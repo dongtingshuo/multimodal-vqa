@@ -151,6 +151,7 @@ The selector chooses one predeclared branch: seed replication after meeting both
 
 ```bash
 git clone https://github.com/GT-Vision-Lab/VQA.git /kaggle/working/VQA
+python scripts/prepare_official_vqa_toolkit.py --toolkit-root /kaggle/working/VQA
 
 python evaluate.py \
   --config configs/kaggle_finetune.yaml \

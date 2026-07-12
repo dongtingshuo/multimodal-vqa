@@ -14,11 +14,9 @@ The seed-42 run completed through epoch 7 and stopped under the configured early
 
 seed 42 任务已完成至 epoch 7，并按配置触发早停。epoch 5 是最佳 checkpoint，硬准确率 `0.6126`、内部 VQA score `0.7101`。任务已导出全部 214,354 条验证预测，并通过两个内部门槛。
 
-This completed result is the recommended engineering checkpoint. Official VQA toolkit evaluation remains required before any leaderboard-style benchmark claim; Run 2 is not justified because epochs 6-7 already show a widening train-validation gap.
+This completed result is the recommended engineering checkpoint. Official-toolkit evaluation on the public validation annotations is complete at `68.42` overall. This is not a test-dev/test-standard leaderboard submission. Run 2 is not justified because epochs 6-7 already show a widening train-validation gap.
 
-该完整结果作为推荐工程 checkpoint。任何 leaderboard 式 benchmark 声明仍需官方 VQA toolkit；epoch 6-7 已显示训练与验证差距扩大，因此没有继续 Run 2 的依据。
-
-该部分结果不会立即触发晋升或 Run 2。Run 1 必须先完整结束，或由配置的 early stopping 正常停止，然后导出全部验证预测并完成官方评估。
+该完整结果作为推荐工程 checkpoint。官方 toolkit 已在公开验证标注上完成评测，overall 为 `68.42`；该结果不是 test-dev/test-standard leaderboard 提交成绩。epoch 6-7 已显示训练与验证差距扩大，因此没有继续 Run 2 的依据。
 
 | Item | Value |
 | --- | --- |
@@ -64,9 +62,9 @@ All other data, objective, batch, epoch budget, preprocessing, evaluation, and a
 
 ## Evaluation And Promotion / 评估与晋升
 
-Every completed run must produce `training_history.csv`, `training_curves.png`, `run_metadata.json`, `run_summary.json`, `best.pt`, `latest.pt`, and 214,354 validation predictions. `official_vqa_metrics.json` is additionally required for official benchmark claims. ViLT Run 1 satisfies the engineering artifact gate; official evaluation remains pending.
+Every completed run must produce `training_history.csv`, `training_curves.png`, `run_metadata.json`, `run_summary.json`, `best.pt`, `latest.pt`, and 214,354 validation predictions. `official_vqa_metrics.json` is additionally required for official-protocol comparison. ViLT Run 1 satisfies the engineering artifact gate and records official validation accuracy `68.42`.
 
-每次完成的运行必须生成 `training_history.csv`、`training_curves.png`、`run_metadata.json`、`run_summary.json`、`best.pt`、`latest.pt` 和 214,354 条验证预测；正式 benchmark 声明还必须生成 `official_vqa_metrics.json`。ViLT Run 1 已通过工程产物门槛，官方评估仍待补充。
+每次完成的运行必须生成 `training_history.csv`、`training_curves.png`、`run_metadata.json`、`run_summary.json`、`best.pt`、`latest.pt` 和 214,354 条验证预测；官方协议对比还必须生成 `official_vqa_metrics.json`。ViLT Run 1 已通过工程产物门槛，并记录官方验证准确率 `68.42`。
 
 Local/Kaggle artifacts and embedded checkpoint configuration are the source of record. The Kaggle workflow does not depend on external experiment-tracking credentials.
 
