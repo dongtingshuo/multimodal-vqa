@@ -54,6 +54,14 @@ The script verifies the published SHA256 digest before placing the file at `chec
 
 脚本会校验发布页公布的 SHA256，然后将文件放置到 `checkpoints/best.pt`。
 
+The `v0.3.0` checkpoint uses ViLT. On first use, allow Transformers to cache
+`dandelin/vilt-b32-mlm-itm` and the processor assets from
+`dandelin/vilt-b32-finetuned-vqa`; later runs can use `--offline`.
+
+`v0.3.0` 权重使用 ViLT。首次运行时需允许 Transformers 缓存
+`dandelin/vilt-b32-mlm-itm` 与 `dandelin/vilt-b32-finetuned-vqa` processor；
+缓存完成后可使用 `--offline`。
+
 ## 4. Train / 训练
 
 ```bash

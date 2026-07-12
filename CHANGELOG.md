@@ -2,10 +2,30 @@
 
 ## Unreleased / 未发布
 
+## 0.3.0 / ViLT Full-Validation Release
+
+Released on 2026-07-12. / 发布于 2026-07-12。
+
 ### Added / 新增
 
+- Published the completed seed-42 ViLT checkpoint selected at epoch 5 after configured early stopping at epoch 7.
+- 发布 seed 42 ViLT 完整训练权重；任务在 epoch 7 按配置早停，最佳权重来自 epoch 5。
+- Recorded full validation metrics, 214,354 exported predictions, AutoDL runtime metadata, and training curves.
+- 记录全量验证指标、214,354 条导出预测、AutoDL 运行元数据与训练曲线。
 - Added a single-GPU AutoDL continuation workflow for RTX 4090D/4090 instances, including environment setup, official data download and validation, format-v3 checkpoint preflight, background training, monitoring, evaluation, and artifact packaging.
 - 增加面向 RTX 4090D/4090 单卡实例的 AutoDL 续训流程，覆盖环境安装、官方数据下载与校验、format-v3 checkpoint 预检、后台训练、状态监控、评估与产物归档。
+
+### Changed / 调整
+
+- Promoted ViLT as the recommended engineering checkpoint and retained `v0.2.0` staged cross-attention as the comparison release.
+- 将 ViLT 晋升为推荐工程权重，并保留 `v0.2.0` staged cross-attention 作为对照版本。
+- Updated the verified checkpoint downloader, model card, experiment report, usage guide, citation metadata, and package version.
+- 更新校验下载器、模型卡、实验报告、使用指南、引用元数据与软件包版本。
+
+### Evaluation Scope / 评估范围
+
+- Metrics are complete project-internal VQA v2 validation results. Official VQA toolkit evaluation remains pending and no leaderboard claim is made.
+- 指标为完整的项目内部 VQA v2 验证结果；官方 VQA toolkit 评估仍待补充，不作 leaderboard 声明。
 
 ## 0.2.0 / Staged Cross-Attention Model Release
 

@@ -12,13 +12,13 @@ A research-oriented multimodal Visual Question Answering system with data prepar
 
 | Track | Status | Best internal hard accuracy | Best internal VQA score |
 | --- | --- | ---: | ---: |
-| Staged cross-attention checkpoint (`v0.2.0`) | Stable release / 稳定发布 | **0.5239** | **0.6233** |
+| ViLT seed-42 checkpoint (`v0.3.0`) | Recommended engineering release / 推荐工程版本 | **0.6126** | **0.7101** |
+| Staged cross-attention checkpoint (`v0.2.0`) | Archived comparison release / 历史对照版本 | 0.5239 | 0.6233 |
 | Legacy checkpoint (`v0.1.0`) | Archived release / 历史发布 | 0.4775 | Not recorded |
-| ViLT candidate, seed 42 | Training paused after epoch 2; resumable / 完成第 2 轮后暂停，可续训 | **0.5891** | **0.6879** |
 
-The ViLT candidate has passed both internal target thresholds, but it is not a released benchmark result. The 10-epoch run is incomplete, full prediction export and official VQA evaluation are still pending, and its checkpoint remains in private training artifacts.
+The ViLT run completed through the configured early-stopping rule at epoch 7, selected epoch 5, and exported predictions for all 214,354 validation questions. The reported metrics are full project-internal validation results, not an official VQA leaderboard score; official toolkit evaluation remains pending.
 
-ViLT 候选模型已通过两个内部目标门槛，但尚不是正式发布的 benchmark 结果。当前 10 epoch 训练只完成 2 个完整 epoch，完整预测导出与官方 VQA 评估仍未完成，checkpoint 暂存于私有训练产物中。
+ViLT 任务已按配置在 epoch 7 触发早停，最佳权重来自 epoch 5，并已导出全部 214,354 条验证预测。本文指标是项目内部全量验证结果，不是官方 VQA leaderboard 分数；官方 toolkit 评估仍待补充。
 
 ## Core Capabilities / 核心能力
 
@@ -170,17 +170,18 @@ The downloader resumes `.part` files and verifies known archive sizes, checksums
 
 ## Trained Checkpoint / 已训练模型
 
-Download and verify the recommended `v0.2.0` checkpoint / 下载并校验推荐的 `v0.2.0` 权重：
+Download and verify the recommended `v0.3.0` checkpoint / 下载并校验推荐的 `v0.3.0` 权重：
 
 ```bash
 python scripts/download_checkpoint.py
 ```
 
-- [GitHub Release](https://github.com/dongtingshuo/multimodal-vqa/releases/tag/v0.2.0)
-- [Direct checkpoint download / 权重直链](https://github.com/dongtingshuo/multimodal-vqa/releases/download/v0.2.0/best.pt)
-- SHA256: `15e15b4a0194b073a153331ad2c6b38ee39400d87e489bb6f0fc77d91e7cb22c`
-- Size / 大小: `660,441,108` bytes
-- Internal validation / 内部验证: hard accuracy `0.5239`, VQA score `0.6233`, Top-5 VQA score `0.8640`
+- [GitHub Release](https://github.com/dongtingshuo/multimodal-vqa/releases/tag/v0.3.0)
+- [Direct checkpoint download / 权重直链](https://github.com/dongtingshuo/multimodal-vqa/releases/download/v0.3.0/best.pt)
+- SHA256: `0cce251f02a7b5349b90c0a6e41850168cc01a700f36fe03663887bae7dbf213`
+- Size / 大小: `1,409,005,580` bytes
+- Internal validation / 内部验证: hard accuracy `0.6126`, VQA score `0.7101`, Top-5 VQA score `0.8908`
+- Runtime assets / 运行依赖: `dandelin/vilt-b32-mlm-itm` and `dandelin/vilt-b32-finetuned-vqa`
 
 ## Training / 模型训练
 
@@ -374,6 +375,7 @@ outputs/
 - [Contributing / 贡献指南](CONTRIBUTING.md)
 - [Security Policy / 安全政策](SECURITY.md)
 - [Citation / 引用元数据](CITATION.cff)
+- [v0.3.0 Release Notes / v0.3.0 发布说明](docs/releases/v0.3.0.md)
 - [v0.2.0 Release Notes / v0.2.0 发布说明](docs/releases/v0.2.0.md)
 
 ## Development / 开发
@@ -405,6 +407,6 @@ This project is released under the MIT License. See [LICENSE](LICENSE).
 
 ## Notes / 说明
 
-This repository implements a compact VQA classification pipeline for practical training, controlled evaluation, and local demonstration. Toy reports are not benchmarks. Runtime metrics are useful for checkpoint selection; release claims require the exported predictions and official VQA toolkit. A new fine-tuned checkpoint is promoted only when it improves the frozen baseline's official score by at least 1.0 absolute point under the documented protocol. Full training requires large datasets and suitable GPU resources. It is not a reproduction of large-scale vision-language models such as BLIP, Flamingo, or LLaVA.
+This repository implements a compact VQA classification pipeline for practical training, controlled evaluation, and local demonstration. Toy reports are not benchmarks. The recommended engineering checkpoint is selected from complete internal validation and full prediction export; official benchmark claims still require the official VQA toolkit. Full training requires large datasets and suitable GPU resources. It is not a reproduction of large-scale generative vision-language models such as BLIP, Flamingo, or LLaVA.
 
-本工程实现的是一个面向实际训练、受控评估和本地演示的紧凑型 VQA 分类管线。玩具报告不是 benchmark。运行时指标用于选择 checkpoint；正式发布结论必须基于导出的预测结果和官方 VQA toolkit。只有当新微调权重在文档规定的协议下，官方分数比冻结基线至少提升 1.0 个绝对点时，才会被提升为推荐版本。全量训练需要大规模数据集和合适的 GPU 资源。本工程并非 BLIP、Flamingo、LLaVA 等大规模视觉语言模型的复现。
+本工程实现的是一个面向实际训练、受控评估和本地演示的紧凑型 VQA 分类管线。玩具报告不是 benchmark。推荐工程权重依据完整内部验证和全量预测导出选择；正式 benchmark 结论仍需官方 VQA toolkit。全量训练需要大规模数据集和合适的 GPU 资源。本工程并非 BLIP、Flamingo、LLaVA 等大规模生成式视觉语言模型的复现。

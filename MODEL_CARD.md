@@ -1,287 +1,161 @@
 # Model Card / 模型说明
 
-This document describes the trained checkpoint used by this repository.
+## Overview / 概览
 
-本文档描述本仓库配套使用的已训练模型权重。
+`multimodal-vqa` v0.3.0 provides a ViLT-based Visual Question Answering classifier trained on
+VQA v2 with COCO 2014 images. It is the repository's recommended engineering checkpoint.
 
-This card covers the recommended `v0.2.0` staged cross-attention checkpoint, the archived `v0.1.0` checkpoint, the strong-model ablation, and the active ViLT continuation candidate. Internal ViLT results are not promoted until training, prediction export, official VQA evaluation, and the release gate are complete.
+`multimodal-vqa` v0.3.0 提供基于 ViLT 的视觉问答分类模型，使用 VQA v2 与 COCO 2014
+图像训练，是本仓库当前推荐的工程 checkpoint。
 
-本文档覆盖推荐的 `v0.2.0` staged cross-attention 权重、历史 `v0.1.0` 权重、strong 模型消融实验，以及正在续训的 ViLT 候选模型。ViLT 内部结果必须完成训练、预测导出、官方 VQA 评估和发布门槛后才能晋升。
+- **Task / 任务**: open-ended Visual Question Answering
+- **Release / 发布**: [v0.3.0](https://github.com/dongtingshuo/multimodal-vqa/releases/tag/v0.3.0)
+- **Checkpoint / 权重**: `best.pt`
+- **Architecture / 架构**: ViLT joint vision-language transformer + Top-3000 classifier
+- **Source backbone / 源模型**: `dandelin/vilt-b32-mlm-itm`
+- **Processor / 处理器**: `dandelin/vilt-b32-finetuned-vqa`
+- **Checkpoint format / 格式**: format v3
+- **Size / 大小**: 1,409,005,580 bytes
+- **SHA256**: `0cce251f02a7b5349b90c0a6e41850168cc01a700f36fe03663887bae7dbf213`
 
-The ViLT route has completed two full epochs and currently leads the internal metrics. Because the configured 10-epoch run was interrupted by Kaggle's runtime limit, the result is explicitly reported as partial and resumable rather than complete.
+## Intended Use / 预期用途
 
-ViLT 路线已完成两个完整 epoch，目前内部指标领先。由于配置的 10 epoch 任务受 Kaggle 最长运行时间中断，该结果明确标记为“部分完成、可续训”，而不是完整训练结果。
+The checkpoint is intended for English VQA research, reproducible internal evaluation,
+single-image inference, and the included Gradio demonstration. It predicts answers from a fixed
+Top-3000 normalized vocabulary. It is not a general-purpose generative VLM and is not intended
+for safety-critical decisions.
 
-## Active Candidate Protocol / 当前候选协议
+该权重适用于英文 VQA 研究、可复现内部评估、单图推理和仓库内 Gradio 演示。模型从固定的
+Top-3000 规范化答案词表中预测，不是通用生成式视觉语言模型，也不适用于安全关键决策。
 
-- **Architecture / 架构**: generic image-text pretrained `dandelin/vilt-b32-mlm-itm` plus a new Top-3000 VQA classifier
-- **Config / 配置**: `configs/kaggle_vilt.yaml`
-- **Data gate / 数据门槛**: 443,757 train questions and 214,354 validation questions; missing mirror images are repaired, not filtered
-- **Internal targets / 内部目标**: hard accuracy `>= 0.55`, VQA score `>= 0.65`
-- **Tracking / 追踪**: local CSV, PNG, JSON, and format-v3 checkpoints; W&B is optional and disabled in the maintained Kaggle runner
-- **Current state / 当前状态**: epoch 2 completed; `latest.pt` resumes at epoch 3
-- **Promotion / 晋升**: retain the published staged checkpoint as recommended until the ViLT run and official evaluation finish
+## Training Data / 训练数据
 
-The source checkpoint is intentionally not VQAv2-fine-tuned. This keeps comparison claims separate from task-specific checkpoint transfer.
+- VQA v2 train/validation questions and annotations
+- COCO 2014 `train2014` and `val2014` images
+- 443,757 training questions and 214,354 validation questions passed strict data validation
+- 434,635 training examples and 209,608 validation examples were internally scorable under the
+  Top-3000 answer vocabulary
 
-源 checkpoint 明确不使用 VQAv2 微调权重，以避免将任务特定 checkpoint 迁移误写成当前工程训练策略带来的提升。
-
-## Model Summary / 模型概要
-
-- **Task / 任务**: Visual Question Answering (VQA)
-- **Checkpoint / 权重文件**: `checkpoints/best.pt`
-- **Release / 发布页**: [v0.2.0](https://github.com/dongtingshuo/multimodal-vqa/releases/tag/v0.2.0)
-- **Checkpoint size / 权重大小**: 660,441,108 bytes
-- **SHA256**: `15e15b4a0194b073a153331ad2c6b38ee39400d87e489bb6f0fc77d91e7cb22c`
-- **Model architecture / 模型结构**: ResNet-50 + DistilBERT + bidirectional cross attention + answer classifier
-- **Answer vocabulary / 答案词表**: Top-3000 normalized answers
-- **Input / 输入**: one RGB image and one English natural-language question
-- **Output / 输出**: Top-k answer candidates and probabilities
+- VQA v2 训练/验证 questions 与 annotations
+- COCO 2014 `train2014` 与 `val2014` 图像
+- 443,757 条训练问题和 214,354 条验证问题通过严格数据校验
+- Top-3000 答案词表下可参与内部评分的训练/验证样本分别为 434,635 / 209,608
 
 ## Training Configuration / 训练配置
 
 ```yaml
-device: cuda
 seed: 42
-
-data:
-  root: data/vqa
-  train_split: train
-  val_split: val
-  answer_vocab_path: data/answer_vocab.json
-  answer_vocab_size: 3000
-  max_train_samples: null
-  max_val_samples: null
-  image_size: 224
-  max_question_length: 32
-  num_workers: 4
-
 model:
-  name: cross_attention
-  text_model_name: distilbert-base-uncased
-  hidden_dim: 512
-  num_attention_heads: 8
-  dropout: 0.2
-  freeze_backbones: true
-  pretrained_cnn: true
-
+  name: vilt
+  pretrained_model_name: dandelin/vilt-b32-mlm-itm
+  gradient_checkpointing: true
+  trainable_layers: 12
+data:
+  processor_name: dandelin/vilt-b32-finetuned-vqa
+  image_size: 384
+  max_question_length: 40
+  answer_vocab_size: 3000
 train:
-  batch_size: 16
-  epochs: 12
+  batch_size: 4
+  gradient_accumulation_steps: 8
   lr: 0.0001
-  image_lr: 0.00001
-  text_lr: 0.000005
+  backbone_lr: 0.00002
   weight_decay: 0.01
-  grad_clip_norm: 1.0
-  gradient_accumulation_steps: 2
-  staged_finetuning: true
-  freeze_epochs: 2
-  unfreeze_image_blocks: 1
-  unfreeze_text_layers: 2
+  scheduler: warmup_plateau
+  early_stopping_patience: 2
+  selection_metric: vqa_score
   use_amp: true
-  pin_memory: true
-  persistent_workers: true
 ```
 
-## Training Data / 训练数据
+Epochs 1-2 ran on a Kaggle P100. The format-v3 checkpoint was then continued on one AutoDL
+RTX 4090D through epoch 7, where the configured early-stopping rule ended training. Optimizer,
+scheduler, AMP scaler, RNG, history, and global-step state were restored at the epoch boundary.
 
-The checkpoint was trained with the VQA v2.0 train split and COCO 2014 image data.
+epoch 1-2 在 Kaggle P100 上运行；随后通过 format-v3 checkpoint 在单卡 AutoDL RTX 4090D
+上续训至 epoch 7，并按配置触发早停。续训在 epoch 边界恢复 optimizer、scheduler、AMP
+scaler、随机数、历史和 global step 状态。
 
-该权重基于 VQA v2.0 训练集和 COCO 2014 图像数据训练。
+## Validation Results / 验证结果
 
-Expected local data layout:
+| Epoch | Train VQA | Val loss | Hard accuracy | Internal VQA | Top-5 VQA | Best |
+| ---: | ---: | ---: | ---: | ---: | ---: | :---: |
+| 1 | 0.4591 | 3.8765 | 0.5395 | 0.6368 | 0.8519 | yes |
+| 2 | 0.6949 | 3.4327 | 0.5891 | 0.6879 | 0.8832 | yes |
+| 3 | 0.7629 | 3.3596 | 0.6050 | 0.7027 | 0.8888 | yes |
+| 4 | 0.8090 | 3.3900 | 0.6103 | 0.7079 | 0.8899 | yes |
+| **5** | **0.8427** | **3.5019** | **0.6126** | **0.7101** | **0.8908** | **yes** |
+| 6 | 0.8672 | 3.6097 | 0.6126 | 0.7099 | 0.8895 | no |
+| 7 | 0.8843 | 3.6601 | 0.6120 | 0.7089 | 0.8889 | no |
 
-本地数据目录结构：
+Epoch 5 is selected by validation VQA score. Epochs 6-7 increased training performance while
+validation VQA score and loss worsened, providing direct evidence of overfitting and justifying
+the early stop.
 
-```text
-data/
-├── answer_vocab.json
-└── vqa/
-    ├── train2014/
-    ├── val2014/
-    ├── v2_OpenEnded_mscoco_train2014_questions.json
-    ├── v2_mscoco_train2014_annotations.json
-    ├── v2_OpenEnded_mscoco_val2014_questions.json
-    └── v2_mscoco_val2014_annotations.json
-```
+模型按验证 VQA score 选择 epoch 5。epoch 6-7 的训练指标继续提高，但验证 VQA score 与
+loss 变差，直接表明过拟合，因此早停是合理的。
 
-## Validation Metrics / 验证指标
+The final prediction export contains 214,354 unique records. Their question IDs exactly match
+the complete official validation questions and annotations. A separate full project evaluation
+of the selected checkpoint reported hard accuracy `0.6127`, internal VQA score `0.7102`, Top-5
+VQA score `0.8908`, and loss `3.5019`.
 
-### Archived v0.1.0 Checkpoint / 历史 v0.1.0 权重
+最终预测文件包含 214,354 条唯一记录，question ID 与完整官方验证 questions 和 annotations
+完全一致。对最佳权重的独立项目全量复评结果为：硬准确率 `0.6127`、内部 VQA score
+`0.7102`、Top-5 VQA score `0.8908`、loss `3.5019`。
 
-Checkpoint metadata:
+![Training curves](docs/assets/vilt-seed42-training-curves.png)
 
-权重内记录的验证结果：
+## Evaluation Scope / 评估范围
 
-```text
-epoch: 10
-val_loss: 0.001488
-val_acc: 0.477510
-```
+These are complete project-internal validation metrics, not an official VQA leaderboard score.
+The official toolkit adapter is included in the repository and the full prediction export is
+preserved, but official toolkit execution is still pending. No leaderboard or cross-project
+state-of-the-art claim is made.
 
-`val_acc` is a simplified Top-1 answer accuracy. It is not the official VQA soft accuracy metric.
+以上是完整的项目内部验证指标，不是官方 VQA leaderboard 分数。仓库已提供官方 toolkit
+适配器并保留完整预测文件，但官方 toolkit 尚未执行。因此不作 leaderboard 或跨项目 SOTA 声明。
 
-`val_acc` 是简化 Top-1 答案准确率，并不是 VQA 官方 soft accuracy 指标。
+## Comparison / 对比
 
-This legacy checkpoint predates the runtime `vqa_score` and per-example BCE-loss normalization. Its stored loss must not be compared directly with loss values produced by the current training code. Re-evaluation with the current code reports `vqa_score`, `top5_vqa_score`, hard accuracy, and the revised loss scale.
+| Checkpoint | Hard accuracy | Internal VQA | Status |
+| --- | ---: | ---: | --- |
+| ViLT seed 42 (`v0.3.0`) | **0.6126** | **0.7101** | Recommended engineering checkpoint |
+| Staged cross-attention (`v0.2.0`) | 0.5239 | 0.6233 | Archived comparison release |
+| Strong cross-attention ablation | 0.4967 | 0.5955 | Not promoted |
+| Legacy checkpoint (`v0.1.0`) | 0.4775 | not recorded | Archived |
 
-该历史权重生成于当前 `vqa_score` 和按样本归一化 BCE loss 实现之前，其中保存的 loss 不应与新版训练代码输出直接比较。使用当前代码重新评估会输出 `vqa_score`、`top5_vqa_score`、硬标签准确率和新 loss 尺度。
+## Runtime Requirements / 运行要求
 
-### Published v0.2.0 Staged Fine-Tuning Checkpoint / 已发布 v0.2.0 分阶段微调权重
+The release stores trained model parameters and checkpoint-owned preprocessing configuration.
+Runtime construction also requires the Hugging Face ViLT backbone and processor assets. Cache
+them once in an online environment before using `demo.py --offline`.
 
-Release and local artifact:
-
-Release 与本地文件：
-
-```text
-Release: https://github.com/dongtingshuo/multimodal-vqa/releases/tag/v0.2.0
-Local: checkpoints/kaggle_finetune_best.pt
-```
-
-Checkpoint size / 权重大小: `660,441,108` bytes
-
-SHA256:
-
-```text
-15e15b4a0194b073a153331ad2c6b38ee39400d87e489bb6f0fc77d91e7cb22c
-```
-
-Internal validation metrics from the completed 12-epoch Kaggle run:
-
-Kaggle 完成 12 epoch 运行得到的内部验证指标：
-
-```text
-epoch: 12
-val_loss: 4.328347
-val_acc: 0.523929
-val_vqa_score: 0.623305
-val_top5_vqa_score: 0.863991
-evaluated_examples: 209410
-exported_predictions: 214124
-```
-
-This checkpoint was trained with VQA v2 labels and a public Kaggle COCO image source after filtering samples whose images were absent from that image source. It is the recommended stable project checkpoint. The metrics above are project-internal validation metrics, not official VQA toolkit scores.
-
-该权重使用 VQA v2 标签和公开 Kaggle COCO 图片源训练，并过滤了该图片源中缺失图片的样本，是当前推荐的稳定工程权重。上述指标是项目内部验证指标，不是官方 VQA toolkit 分数。
-
-### Strong Cross-Attention Ablation / 强化交叉注意力消融实验
-
-The completed 24-epoch strong-model checkpoint is retained at:
-
-24 epoch 强化模型实验权重保留于：
-
-```text
-checkpoints/kaggle_strong_best.pt
-```
-
-Checkpoint size / 权重大小: `811,846,462` bytes
-
-SHA256:
-
-```text
-07d8bfb2c4de7e1f19a16c70b48b8043a78959498e8407d6f48486482f84aa7e
-```
-
-```text
-epoch: 22
-val_loss: 34.009508
-val_acc: 0.496743
-val_vqa_score: 0.595518
-val_top5_vqa_score: 0.827068
-evaluated_examples: 209410
-exported_predictions: 214124
-```
-
-This ablation underperformed the staged fine-tuning candidate and is therefore not the
-recommended checkpoint. It remains available for reproducibility and architecture comparison.
-
-该消融实验的表现低于分阶段微调候选模型，因此不作为推荐 checkpoint，
-仅用于可复现性与模型架构对比。
-
-### ViLT Continuation Candidate / ViLT 续训候选模型
-
-The current private Kaggle checkpoint is a format-v3 continuation artifact from the seed-42 run. It completed two epochs before the Kaggle session ended. Both `best.pt` and `latest.pt` record epoch 2; `latest.pt` also preserves optimizer, scheduler, AMP scaler, RNG, history, and global-step state for continuation from epoch 3.
-
-当前私有 Kaggle checkpoint 来自 seed 42 的 format-v3 续训任务。Kaggle 会话结束前完成了两个 epoch；`best.pt` 与 `latest.pt` 均记录 epoch 2，其中 `latest.pt` 还保存优化器、调度器、AMP scaler、随机状态、历史和 global step，可从 epoch 3 继续。
-
-| Epoch | Validation loss | Hard accuracy | VQA score | Top-5 VQA score |
-| ---: | ---: | ---: | ---: | ---: |
-| 1 | 3.8765 | 0.5395 | 0.6368 | 0.8519 |
-| 2 | **3.4327** | **0.5891** | **0.6879** | **0.8832** |
-
-These are project-internal validation metrics from a partial run. They pass the internal `0.55 / 0.65` gates, but they are not official VQA toolkit scores and must not be compared as a finished benchmark until the remaining epochs, prediction export, and official evaluation complete.
-
-以上是部分训练任务的项目内部验证指标，已通过 `0.55 / 0.65` 内部门槛，但并非官方 VQA toolkit 分数。在剩余 epoch、预测导出和官方评估完成前，不应将其作为完整 benchmark 结果比较。
-
-## Intended Use / 预期用途
-
-This model is intended for:
-
-该模型适用于：
-
-- local VQA inference experiments / 本地视觉问答推理实验
-- controlled validation on VQA-format data / VQA 格式数据的受控验证
-- Gradio-based interactive demonstration / 基于 Gradio 的交互式演示
-- further fine-tuning and architecture iteration / 后续微调与结构迭代
-
-## Limitations / 局限性
-
-- The model predicts answers from a fixed Top-3000 vocabulary.
-- Questions should be written in English.
-- The model is not a general-purpose large vision-language model.
-- Performance depends on COCO/VQA-style image-question distributions.
-- The archived v0.1.0 metadata records simplified Top-1 accuracy only; v0.2.0 includes hard accuracy and VQA soft scores.
-
-- 模型只能从固定 Top-3000 答案词表中预测答案。
-- 问题建议使用英文。
-- 该模型不是通用大规模视觉语言模型。
-- 模型表现依赖 COCO/VQA 风格的图像与问题分布。
-- 历史 v0.1.0 元数据仅记录简化 Top-1 准确率；v0.2.0 已包含硬准确率和 VQA soft score。
-
-## Distribution / 权重发布
-
-Do not commit `checkpoints/best.pt` directly to the normal Git repository. The checkpoint is larger than GitHub's regular file size limit.
-
-不要将 `checkpoints/best.pt` 直接提交到普通 Git 仓库。该权重文件超过 GitHub 普通文件大小限制。
-
-The trained checkpoint is published as a verified GitHub Release asset while `checkpoints/` remains ignored by Git.
-
-已训练权重作为可校验的 GitHub Release 附件发布，`checkpoints/` 仍保持 Git 忽略。
+发布权重保存训练参数和 checkpoint 自带的预处理配置。运行时还需要 Hugging Face ViLT
+backbone 与 processor 资源；首次联网缓存后，才可使用 `demo.py --offline`。
 
 ```bash
 python scripts/download_checkpoint.py
+python demo.py --checkpoint checkpoints/best.pt
 ```
 
-[Direct download / 直接下载](https://github.com/dongtingshuo/multimodal-vqa/releases/download/v0.2.0/best.pt)
+## Limitations / 局限
 
-## Loading / 加载方式
+- Fixed Top-3000 answer vocabulary cannot represent every valid answer.
+- The default language path expects English questions.
+- COCO/VQA domain bias and annotation bias remain present.
+- Confidence values are classifier scores and are not calibrated guarantees.
+- Official VQA toolkit parity has not yet been asserted.
 
-Inference and evaluation use architecture and preprocessing settings stored inside the checkpoint. The supplied YAML continues to control local paths, device selection, and runtime batch settings.
+- 固定 Top-3000 答案词表无法覆盖所有有效答案。
+- 默认语言路径面向英文问题。
+- 仍存在 COCO/VQA 数据域与标注偏差。
+- 置信度是分类器分数，不是经过校准的保证。
+- 尚未声明与官方 VQA toolkit 指标完全一致。
 
-推理与评估优先使用 checkpoint 内保存的模型架构和预处理配置；命令行传入的 YAML 继续控制本地路径、设备和运行时批大小。
+## Security / 安全
 
-```bash
-python demo.py --config configs/default.yaml --checkpoint checkpoints/best.pt
-```
+PyTorch checkpoints use pickle-based serialization. Download only from the official project
+Release and verify the published SHA256 before loading.
 
-```bash
-python infer.py \
-  --config configs/default.yaml \
-  --checkpoint checkpoints/best.pt \
-  --image data/vqa/val2014/COCO_val2014_000000000042.jpg \
-  --question "What is in the image?" \
-  --topk 5
-```
-
-For the original local copy of the released checkpoint:
-
-使用已发布权重的原始本地副本：
-
-```bash
-python infer.py \
-  --config configs/default.yaml \
-  --checkpoint checkpoints/kaggle_finetune_best.pt \
-  --image data/vqa/val2014/COCO_val2014_000000000042.jpg \
-  --question "What is in the image?" \
-  --topk 5
-```
+PyTorch checkpoint 使用基于 pickle 的序列化。请仅从项目官方 Release 下载，并在加载前校验
+发布的 SHA256。
