@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import time
+import urllib.parse
 import urllib.request
 from pathlib import Path
 
@@ -10,6 +11,14 @@ from tqdm import tqdm
 
 class DownloadIntegrityError(RuntimeError):
     pass
+
+
+def validate_https_url(url: str) -> None:
+    parsed = urllib.parse.urlsplit(url)
+    if parsed.scheme.lower() != "https" or not parsed.hostname:
+        raise ValueError("Download URL must use HTTPS and include a host.")
+    if parsed.username or parsed.password:
+        raise ValueError("Download URL must not contain embedded credentials.")
 
 
 def file_checksum(path: str | Path, algorithm: str = "sha256") -> str:
@@ -58,6 +67,7 @@ def download_file(
     retries: int = 3,
     timeout: int = 30,
 ) -> Path:
+    validate_https_url(url)
     output = Path(output_path)
     output.parent.mkdir(parents=True, exist_ok=True)
     if output.exists():

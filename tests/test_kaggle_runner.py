@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 import json
+import zipfile
 from pathlib import Path
+
+import pytest
 
 from kaggle_finetune_kernel import run_kaggle_finetune
 
@@ -65,3 +68,18 @@ def test_kaggle_runner_has_no_wandb_secret_path() -> None:
     assert "kaggle_secrets" not in source
     assert "WANDB_API_KEY" not in source
     assert '"--no-wandb"' in source
+
+
+def test_kaggle_zip_extraction_rejects_traversal(tmp_path: Path) -> None:
+    archive_path = tmp_path / "unsafe.zip"
+    with zipfile.ZipFile(archive_path, "w") as archive:
+        archive.writestr("../outside.txt", "unsafe")
+
+    with pytest.raises(zipfile.BadZipFile, match="Unsafe archive member"):
+        run_kaggle_finetune.extract_zip_safely(archive_path, tmp_path / "output")
+    assert not (tmp_path / "outside.txt").exists()
+
+
+def test_kaggle_download_rejects_non_https(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="Download URL"):
+        run_kaggle_finetune.download_https("file:///tmp/data.zip", tmp_path / "data.zip")

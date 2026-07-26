@@ -2,6 +2,14 @@
 
 ## Unreleased / 未发布
 
+- Restrict download helpers to HTTPS and add traversal/link checks for Kaggle zip and AutoDL tar extraction.
+- Align the package build backend with SPDX license metadata support.
+- Add conservative dependency-update automation. An advisory audit identified the legacy Gradio/Starlette web stack, but its coupled major-version migration is deferred until checkpoint, demo, and training-runtime compatibility are tested together.
+
+- 将下载工具限制为 HTTPS，并为 Kaggle zip 与 AutoDL tar 解压增加路径穿越/链接检查。
+- 使构建后端与 SPDX 许可证元数据要求一致。
+- 增加保守的依赖更新自动化。漏洞审计识别出历史 Gradio/Starlette Web 依赖组合，但其联动大版本迁移将延后，直至权重、演示与训练运行时共同通过兼容性验证。
+
 ## 0.3.0 / ViLT Full-Validation Release
 
 Released on 2026-07-12. / 发布于 2026-07-12。

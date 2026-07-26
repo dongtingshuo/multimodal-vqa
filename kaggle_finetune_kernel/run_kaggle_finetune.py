@@ -2,11 +2,13 @@ import json
 import os
 import re
 import shutil
+import stat
 import subprocess
 import time
+import urllib.parse
 import urllib.request
 import zipfile
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 WORK_ROOT = Path(os.environ.get("WORK_ROOT", "/kaggle/working/multimodal-vqa"))
 REPO_ROOT = Path(os.environ.get("REPO_ROOT", "/kaggle/working/multimodal-vqa-repo"))
@@ -173,6 +175,41 @@ def find_file(root, name):
     raise FileNotFoundError(f"Could not find file {name!r} under {root}")
 
 
+def validate_https_url(url):
+    parsed = urllib.parse.urlsplit(url)
+    if parsed.scheme.lower() != "https" or not parsed.hostname:
+        raise ValueError("Download URL must use HTTPS and include a host.")
+    if parsed.username or parsed.password:
+        raise ValueError("Download URL must not contain embedded credentials.")
+
+
+def download_https(url, output):
+    validate_https_url(url)
+    urllib.request.urlretrieve(url, output)
+
+
+def extract_zip_safely(archive_path, target):
+    target = Path(target).resolve()
+    target.mkdir(parents=True, exist_ok=True)
+    with zipfile.ZipFile(archive_path) as archive:
+        for member in archive.infolist():
+            parts = PurePosixPath(member.filename).parts
+            mode = member.external_attr >> 16
+            if not parts or member.filename.startswith("/") or ".." in parts:
+                raise zipfile.BadZipFile(f"Unsafe archive member: {member.filename}")
+            if stat.S_ISLNK(mode):
+                raise zipfile.BadZipFile(f"Unsupported archive link: {member.filename}")
+            destination = target.joinpath(*parts).resolve()
+            if not destination.is_relative_to(target):
+                raise zipfile.BadZipFile(f"Unsafe archive member: {member.filename}")
+            if member.is_dir():
+                destination.mkdir(parents=True, exist_ok=True)
+                continue
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            with archive.open(member) as source, destination.open("wb") as output:
+                shutil.copyfileobj(source, output)
+
+
 def download_vqa_file(filename):
     DOWNLOAD_ROOT.mkdir(parents=True, exist_ok=True)
     existing = list(DOWNLOAD_ROOT.rglob(filename))
@@ -183,10 +220,9 @@ def download_vqa_file(filename):
     zip_path = DOWNLOAD_ROOT / Path(url).name
     if not zip_path.exists():
         print(f"Downloading {url}", flush=True)
-        urllib.request.urlretrieve(url, zip_path)
+        download_https(url, zip_path)
     print(f"Extracting {zip_path}", flush=True)
-    with zipfile.ZipFile(zip_path) as archive:
-        archive.extractall(DOWNLOAD_ROOT)
+    extract_zip_safely(zip_path, DOWNLOAD_ROOT)
     return find_file(DOWNLOAD_ROOT, filename)
 
 
@@ -272,7 +308,7 @@ def prepare_val_images(source_dir, target_dir, questions_path):
         url = f"{COCO_IMAGE_BASE_URL}/val2014/{filename}"
         for attempt in range(1, 4):
             try:
-                urllib.request.urlretrieve(url, temporary)
+                download_https(url, temporary)
                 temporary.replace(target)
                 break
             except Exception:

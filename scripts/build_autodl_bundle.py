@@ -8,7 +8,7 @@ import subprocess
 import tarfile
 import tempfile
 from datetime import datetime, timezone
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 import torch
 
@@ -50,6 +50,35 @@ def git(*args: str) -> str:
     return result.stdout.strip()
 
 
+def extract_repository_archive(archive_path: Path, target: Path) -> None:
+    target = target.resolve()
+    target.mkdir(parents=True, exist_ok=True)
+    with tarfile.open(archive_path) as archive:
+        for member in archive.getmembers():
+            parts = PurePosixPath(member.name).parts
+            if not parts or member.name.startswith("/") or ".." in parts:
+                raise tarfile.ReadError(f"Unsafe archive member: {member.name}")
+            if member.issym() or member.islnk() or member.isdev() or member.isfifo():
+                raise tarfile.ReadError(f"Unsupported archive member: {member.name}")
+
+            destination = target.joinpath(*parts).resolve()
+            if not destination.is_relative_to(target):
+                raise tarfile.ReadError(f"Unsafe archive member: {member.name}")
+            if member.isdir():
+                destination.mkdir(parents=True, exist_ok=True)
+                continue
+            if not member.isfile():
+                raise tarfile.ReadError(f"Unsupported archive member: {member.name}")
+
+            source = archive.extractfile(member)
+            if source is None:
+                raise tarfile.ReadError(f"Unreadable archive member: {member.name}")
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            with source, destination.open("wb") as output:
+                shutil.copyfileobj(source, output)
+            destination.chmod(member.mode & 0o777)
+
+
 def export_repository(target: Path) -> str:
     commit = git("rev-parse", "HEAD")
     archive_path = target.parent / "repository.tar"
@@ -58,9 +87,7 @@ def export_repository(target: Path) -> str:
         cwd=PROJECT_ROOT,
         check=True,
     )
-    target.mkdir(parents=True)
-    with tarfile.open(archive_path) as archive:
-        archive.extractall(target)
+    extract_repository_archive(archive_path, target)
     archive_path.unlink()
     return commit
 
