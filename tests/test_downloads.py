@@ -8,7 +8,13 @@ from pathlib import Path
 import pytest
 
 from scripts.prepare_vqa_data import extract_zip
-from vqa_project.downloads import DownloadIntegrityError, download_file, file_checksum, verify_file
+from vqa_project.downloads import (
+    DownloadIntegrityError,
+    download_file,
+    file_checksum,
+    validate_https_url,
+    verify_file,
+)
 
 
 def test_checksum_and_size_validation(tmp_path: Path) -> None:
@@ -62,6 +68,24 @@ def test_download_resumes_partial_file(tmp_path: Path, monkeypatch) -> None:
     )
     assert result.read_bytes() == payload
     assert not partial.exists()
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "http://example.com/artifact",
+        "file:///tmp/artifact",
+        "https://user:password@example.com/artifact",
+        "https:///missing-host",
+    ],
+)
+def test_download_rejects_unsafe_urls(url: str, tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="Download URL"):
+        download_file(url, tmp_path / "artifact", retries=1)
+
+
+def test_https_url_validation_accepts_normal_url() -> None:
+    validate_https_url("https://example.com/artifact?download=1")
 
 
 def test_zip_extraction_rejects_path_traversal(tmp_path: Path) -> None:
