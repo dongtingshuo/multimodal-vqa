@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import random
+from contextlib import nullcontext
 from pathlib import Path
 from typing import Any, Callable
 
 import torch
+import torch.distributed as distributed
 from torch import nn
 from torch.utils.data import DataLoader
 from tqdm import tqdm
@@ -68,6 +70,7 @@ def train_one_epoch(
     epoch: int | None = None,
     global_step_start: int = 0,
     scheduler: Any | None = None,
+    is_main_process: bool = True,
 ) -> dict[str, float]:
     model.train()
     amp_enabled = _cuda_amp_enabled(device, use_amp)
@@ -80,21 +83,24 @@ def train_one_epoch(
     total_examples = 0
     optimizer_steps = 0
 
-    progress = tqdm(dataloader, desc="train", leave=False)
+    progress = tqdm(dataloader, desc="train", leave=False, disable=not is_main_process)
     optimizer.zero_grad(set_to_none=True)
     total_batches = len(dataloader)
     final_group_size = total_batches % accumulation_steps
     final_group_start = total_batches - final_group_size + 1
     for step, batch in enumerate(progress, start=1):
         batch = move_batch_to_device(batch, device)
-
-        with torch.amp.autocast(device_type=device.type, enabled=amp_enabled):
-            logits = forward_model(model, batch)
-            loss = vqa_bce_loss(logits, batch["targets"], label_smoothing=label_smoothing)
-
-        loss_divisor = final_group_size if final_group_size and step >= final_group_start else accumulation_steps
-        scaler.scale(loss / loss_divisor).backward()
         should_step = step % accumulation_steps == 0 or step == total_batches
+        no_sync = getattr(model, "no_sync", None)
+        sync_context = no_sync() if callable(no_sync) and not should_step else nullcontext()
+        with sync_context:
+            with torch.amp.autocast(device_type=device.type, enabled=amp_enabled):
+                logits = forward_model(model, batch)
+                loss = vqa_bce_loss(logits, batch["targets"], label_smoothing=label_smoothing)
+
+            loss_divisor = final_group_size if final_group_size and step >= final_group_start else accumulation_steps
+            scaler.scale(loss / loss_divisor).backward()
+
         if should_step:
             if grad_clip_norm > 0:
                 scaler.unscale_(optimizer)
@@ -118,14 +124,22 @@ def train_one_epoch(
         total_loss += loss.item() * batch_size
 
         if step % max(log_every, 1) == 0:
+            totals = torch.tensor(
+                [total_loss, total_correct, total_vqa_score, total_top5_vqa_score, total_examples],
+                dtype=torch.float64,
+                device=device,
+            )
+            if distributed.is_available() and distributed.is_initialized():
+                distributed.all_reduce(totals, op=distributed.ReduceOp.SUM)
+            running_examples = max(float(totals[4].item()), 1.0)
             running = {
                 "epoch": float(epoch or 0),
                 "step": float(step),
                 "global_step": float(global_step_start + optimizer_steps),
-                "train/loss": total_loss / total_examples,
-                "train/accuracy": total_correct / total_examples,
-                "train/vqa_score": total_vqa_score / total_examples,
-                "train/top5_vqa_score": total_top5_vqa_score / total_examples,
+                "train/loss": float(totals[0].item()) / running_examples,
+                "train/accuracy": float(totals[1].item()) / running_examples,
+                "train/vqa_score": float(totals[2].item()) / running_examples,
+                "train/top5_vqa_score": float(totals[3].item()) / running_examples,
                 "train/lr": float(optimizer.param_groups[0]["lr"]),
             }
             running.update(
@@ -134,21 +148,30 @@ def train_one_epoch(
                     for index, group in enumerate(optimizer.param_groups)
                 }
             )
-            progress.set_postfix(
-                loss=running["train/loss"],
-                acc=running["train/accuracy"],
-                vqa=running["train/vqa_score"],
-                top5=running["train/top5_vqa_score"],
-                lr=running["train/lr"],
-            )
+            if is_main_process:
+                progress.set_postfix(
+                    loss=running["train/loss"],
+                    acc=running["train/accuracy"],
+                    vqa=running["train/vqa_score"],
+                    top5=running["train/top5_vqa_score"],
+                    lr=running["train/lr"],
+                )
             if step_callback is not None:
                 step_callback(running)
 
+    totals = torch.tensor(
+        [total_loss, total_correct, total_vqa_score, total_top5_vqa_score, total_examples],
+        dtype=torch.float64,
+        device=device,
+    )
+    if distributed.is_available() and distributed.is_initialized():
+        distributed.all_reduce(totals, op=distributed.ReduceOp.SUM)
+    total_count = max(float(totals[4].item()), 1.0)
     return {
-        "loss": total_loss / max(total_examples, 1),
-        "accuracy": total_correct / max(total_examples, 1),
-        "vqa_score": total_vqa_score / max(total_examples, 1),
-        "top5_vqa_score": total_top5_vqa_score / max(total_examples, 1),
+        "loss": float(totals[0].item()) / total_count,
+        "accuracy": float(totals[1].item()) / total_count,
+        "vqa_score": float(totals[2].item()) / total_count,
+        "top5_vqa_score": float(totals[3].item()) / total_count,
         "optimizer_steps": float(optimizer_steps),
     }
 
@@ -217,6 +240,7 @@ def save_checkpoint(
     scaler: torch.amp.GradScaler | None = None,
     training_state: dict[str, Any] | None = None,
     data_generator: torch.Generator | None = None,
+    distributed_rng_states: list[dict[str, Any]] | None = None,
 ) -> None:
     checkpoint_path = Path(path)
     checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
@@ -232,12 +256,12 @@ def save_checkpoint(
         "idx_to_answer": answer_vocab.idx_to_answer,
         "metadata": metadata or {},
         "training_state": training_state or {},
-        "rng_state": {
-            "python": random.getstate(),
-            "torch": torch.get_rng_state(),
-            "cuda": torch.cuda.get_rng_state_all() if torch.cuda.is_available() else None,
-            "data_generator": data_generator.get_state() if data_generator is not None else None,
-        },
+        "rng_state": (
+            distributed_rng_states[0]
+            if distributed_rng_states
+            else capture_rng_state(data_generator)
+        ),
+        "distributed_rng_states": distributed_rng_states,
     }
     temporary_path = checkpoint_path.with_suffix(checkpoint_path.suffix + ".tmp")
     torch.save(payload, temporary_path)
@@ -251,6 +275,8 @@ def restore_training_checkpoint(
     scheduler: torch.optim.lr_scheduler.LRScheduler | torch.optim.lr_scheduler.ReduceLROnPlateau | None,
     scaler: torch.amp.GradScaler | None,
     data_generator: torch.Generator | None,
+    rank: int = 0,
+    device: torch.device | None = None,
 ) -> dict[str, Any]:
     model.load_state_dict(checkpoint["model_state"])
     if "optimizer_state" not in checkpoint:
@@ -261,16 +287,37 @@ def restore_training_checkpoint(
     if scaler is not None and checkpoint.get("scaler_state") is not None:
         scaler.load_state_dict(checkpoint["scaler_state"])
 
-    rng_state = checkpoint.get("rng_state") or {}
+    distributed_rng_states = checkpoint.get("distributed_rng_states") or []
+    if rank < len(distributed_rng_states):
+        rng_state = distributed_rng_states[rank]
+    else:
+        rng_state = checkpoint.get("rng_state") or {}
     if rng_state.get("python") is not None:
         random.setstate(rng_state["python"])
     if rng_state.get("torch") is not None:
         torch.set_rng_state(rng_state["torch"].cpu())
-    if torch.cuda.is_available() and rng_state.get("cuda") is not None:
-        torch.cuda.set_rng_state_all([state.cpu() for state in rng_state["cuda"]])
+    cuda_state = rng_state.get("cuda")
+    if torch.cuda.is_available() and cuda_state is not None:
+        if torch.is_tensor(cuda_state):
+            torch.cuda.set_rng_state(cuda_state.cpu(), device=device)
+        elif device is not None and device.type == "cuda":
+            index = device.index if device.index is not None else torch.cuda.current_device()
+            selected = cuda_state[index] if index < len(cuda_state) else cuda_state[0]
+            torch.cuda.set_rng_state(selected.cpu(), device=device)
+        else:
+            torch.cuda.set_rng_state_all([state.cpu() for state in cuda_state])
     if data_generator is not None and rng_state.get("data_generator") is not None:
         data_generator.set_state(rng_state["data_generator"].cpu())
     return dict(checkpoint.get("training_state") or {})
+
+
+def capture_rng_state(data_generator: torch.Generator | None = None) -> dict[str, Any]:
+    return {
+        "python": random.getstate(),
+        "torch": torch.get_rng_state(),
+        "cuda": torch.cuda.get_rng_state(torch.cuda.current_device()).cpu() if torch.cuda.is_available() else None,
+        "data_generator": data_generator.get_state() if data_generator is not None else None,
+    }
 
 
 def load_checkpoint(path: str | Path, device: torch.device) -> dict[str, Any]:

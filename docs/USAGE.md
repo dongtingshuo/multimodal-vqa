@@ -72,6 +72,18 @@ python train.py --config configs/default.yaml --device auto
 
 `--device` 支持 `auto`、`cpu`、`cuda` 和 `mps`。路径、epoch 数与样本上限也可通过命令行覆盖，无需修改 YAML。
 
+Two-GPU CUDA uses PyTorch DDP; single-GPU and CPU/MPS commands remain unchanged:
+
+双卡 CUDA 使用 PyTorch DDP；单卡与 CPU/MPS 命令保持不变：
+
+```bash
+torchrun --standalone --nproc_per_node=2 train.py --config configs/kaggle_vilt.yaml --device cuda
+```
+
+See [Distributed Training / 单卡与多卡训练](DISTRIBUTED_TRAINING.md) for effective-batch and resume details.
+
+有效 batch 和续训说明见[单卡与多卡训练文档](DISTRIBUTED_TRAINING.md)。
+
 The best checkpoint is saved to:
 
 最佳权重保存到：

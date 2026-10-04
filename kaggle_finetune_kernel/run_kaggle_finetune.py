@@ -12,13 +12,14 @@ from pathlib import Path, PurePosixPath
 
 WORK_ROOT = Path(os.environ.get("WORK_ROOT", "/kaggle/working/multimodal-vqa"))
 REPO_ROOT = Path(os.environ.get("REPO_ROOT", "/kaggle/working/multimodal-vqa-repo"))
-RUN_NAME = os.environ.get("RUN_NAME", "vilt-seed42")
-CONFIG_PATH = os.environ.get("CONFIG_PATH", "configs/kaggle_vilt.yaml")
+RUN_NAME = os.environ.get("RUN_NAME", "vilt-last6-t4x2")
+CONFIG_PATH = os.environ.get("CONFIG_PATH", "configs/kaggle_vilt_last6_t4x2.yaml")
 GIT_REF = os.environ.get("GIT_REF", "main")
 TOTAL_EPOCHS = os.environ.get("TOTAL_EPOCHS", "10")
+VQA_NUM_GPUS = os.environ.get("VQA_NUM_GPUS", "auto").strip().lower()
 RAW_DATA_ROOT = Path(os.environ.get("RAW_DATA_ROOT", "/kaggle/input/coco2014vqa/Dataset"))
 RESUME_ROOT = Path(
-    os.environ.get("RESUME_ROOT", "/kaggle/input/multimodal-vqa-vilt-resume")
+    os.environ.get("RESUME_ROOT", "/kaggle/input/multimodal-vqa-vilt-last6-t4x2-resume")
 )
 TORCH_VERSION = os.environ.get("TORCH_VERSION", "2.4.1+cu121")
 TORCHVISION_VERSION = os.environ.get("TORCHVISION_VERSION", "0.19.1+cu121")
@@ -62,6 +63,31 @@ COCO_IMAGE_RE = re.compile(r"COCO_(?:train|val)2014_(\d{12})\.jpg$")
 def run(command, cwd=None):
     print("+", " ".join(str(part) for part in command), flush=True)
     subprocess.run([str(part) for part in command], cwd=cwd, check=True)
+
+
+def training_launcher():
+    probe = subprocess.run(
+        ["python", "-c", "import torch; print(torch.cuda.device_count())"],
+        cwd=REPO_ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    available = int(probe.stdout.strip().splitlines()[-1])
+    requested = available if VQA_NUM_GPUS == "auto" else int(VQA_NUM_GPUS)
+    if requested < 1 or requested > available:
+        raise ValueError(f"VQA_NUM_GPUS={requested} is invalid; this runtime exposes {available} CUDA GPU(s).")
+    print(f"Using {requested} of {available} visible GPU(s) for training", flush=True)
+    if requested == 1:
+        return ["python", "train.py"]
+    return [
+        "python",
+        "-m",
+        "torch.distributed.run",
+        "--standalone",
+        f"--nproc_per_node={requested}",
+        "train.py",
+    ]
 
 
 def torch_runtime_is_usable():
@@ -443,9 +469,7 @@ def main():
         ],
         cwd=REPO_ROOT,
     )
-    train_command = [
-        "python",
-        "train.py",
+    train_command = training_launcher() + [
         "--config",
         CONFIG_PATH,
         "--device",

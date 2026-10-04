@@ -184,6 +184,7 @@ python scripts/download_checkpoint.py
 - Internal validation / 内部验证: hard accuracy `0.6126`, VQA score `0.7101`, Top-5 VQA score `0.8908`
 - Official VQA v2 validation / 官方 VQA v2 验证: overall `68.42`, yes/no `85.88`, other `60.40`, number `48.54`
 - [Evaluation provenance / 评测溯源](docs/evaluation/v0.3.0-official-vqa.md)
+- [Answer coverage and error diagnostics / 答案覆盖率与错误诊断](docs/evaluation/v0.3.0-vilt-diagnostics.md)
 - Runtime assets / 运行依赖: `dandelin/vilt-b32-mlm-itm` and `dandelin/vilt-b32-finetuned-vqa`
 
 ## Training / 模型训练
@@ -200,6 +201,17 @@ Explicit execution modes / 显式选择运行设备：
 python train.py --config configs/default.yaml --device cuda
 python train.py --config configs/demo_cpu.yaml --device cpu
 ```
+
+Single- and multi-GPU CUDA / 单卡与多卡 CUDA：
+
+```bash
+python train.py --config configs/kaggle_vilt.yaml --device cuda
+torchrun --standalone --nproc_per_node=2 train.py --config configs/kaggle_vilt.yaml --device cuda
+```
+
+DDP preserves the configured global effective batch by default. See [Distributed Training / 单卡与多卡训练](docs/DISTRIBUTED_TRAINING.md) for resume behavior and Kaggle GPU selection.
+
+DDP 默认保持配置的全局有效 batch。续训规则与 Kaggle GPU 选择见[单卡与多卡训练文档](docs/DISTRIBUTED_TRAINING.md)。
 
 Controlled frozen baseline and staged fine-tuning / 受控冻结基线与分阶段微调：
 
@@ -382,6 +394,7 @@ outputs/
 - [Experiment Report / 实验报告](docs/EXPERIMENT_REPORT.md)
 - [Official VQA Evaluation / 官方 VQA 评测](docs/evaluation/v0.3.0-official-vqa.md)
 - [Training Protocol / 训练协议](docs/TRAINING_PROTOCOL.md)
+- [Distributed Training / 单卡与多卡训练](docs/DISTRIBUTED_TRAINING.md)
 - [Kaggle Training / Kaggle 训练](docs/KAGGLE.md)
 - [AutoDL Continuation / AutoDL 续训](autodl/README.md)
 - [Troubleshooting / 故障排查](docs/TROUBLESHOOTING.md)

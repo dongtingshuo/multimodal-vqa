@@ -47,8 +47,6 @@ def select_followup(rows: list[dict[str, float]]) -> dict[str, object]:
     ) >= 2
     max_gap = max(row["train_vqa_score"] - row["val_vqa_score"] for row in rows)
 
-    if best["val_accuracy"] >= 0.55 and best["val_vqa_score"] >= 0.65:
-        return {"branch": "replicate", "reason": "Run 1 passed both quality gates.", "seed": 1337}
     if unstable:
         return {
             "branch": "lower_backbone_lr",
@@ -63,6 +61,16 @@ def select_followup(rows: list[dict[str, float]]) -> dict[str, object]:
             "seed": 42,
             "fixed_finetune_stage": "partial",
             "trainable_vilt_layers": 6,
+        }
+    if best["val_accuracy"] >= 0.55 and best["val_vqa_score"] >= 0.65:
+        return {
+            "branch": "replicate",
+            "reason": (
+                "Quality gates passed without repeated instability or a large train-validation gap; "
+                "this run measures seed stability, not expected score gain."
+            ),
+            "seed": 1337,
+            "purpose": "seed_stability",
         }
     return {
         "branch": "higher_backbone_lr",

@@ -409,7 +409,9 @@ class ViltVQAModel(nn.Module):
         self.finetune_stage = "full"
         self._trainable_backbone_modules: list[nn.Module] = []
         if gradient_checkpointing and not mock_backbones:
-            self.backbone.gradient_checkpointing_enable()
+            self.backbone.gradient_checkpointing_enable(
+                gradient_checkpointing_kwargs={"use_reentrant": False}
+            )
         if freeze_backbones:
             self.freeze_backbones()
 

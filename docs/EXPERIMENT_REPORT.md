@@ -402,6 +402,10 @@ test-dev/test-standard leaderboard 提交成绩。
 
 ## Current Limitations / 当前限制
 
+The full answer-vocabulary coverage and question-type error profile for the released ViLT checkpoint are documented in [VQA validation diagnostics / VQA 验证集诊断](evaluation/v0.3.0-vilt-diagnostics.md). The analysis confirms that overall vocabulary coverage is high, while performance is notably weaker for numeric, name, time, and explanatory questions.
+
+已发布 ViLT checkpoint 的完整答案词表覆盖率与问题类型错误画像见 [VQA 验证集诊断](evaluation/v0.3.0-vilt-diagnostics.md)。分析显示整体词表覆盖率较高，但数字、名称、时间和解释类问题表现明显较弱。
+
 - The answer space is a fixed Top-K vocabulary.
 - Questions are expected to be English in the default tokenizer setup.
 - Official validation scoring is complete; held-out test-server performance is not measured.
