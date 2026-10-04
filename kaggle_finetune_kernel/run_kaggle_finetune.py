@@ -1,14 +1,20 @@
+import codecs
 import json
 import os
 import re
 import shutil
 import stat
 import subprocess
+import sys
+import threading
 import time
 import urllib.parse
 import urllib.request
 import zipfile
+from contextlib import contextmanager
+from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
+from typing import Optional
 
 WORK_ROOT = Path(os.environ.get("WORK_ROOT", "/kaggle/working/multimodal-vqa"))
 REPO_ROOT = Path(os.environ.get("REPO_ROOT", "/kaggle/working/multimodal-vqa-repo"))
@@ -16,7 +22,7 @@ RUN_NAME = os.environ.get("RUN_NAME", "vilt-last6-t4x2")
 CONFIG_PATH = os.environ.get("CONFIG_PATH", "configs/kaggle_vilt_last6_t4x2.yaml")
 GIT_REF = os.environ.get("GIT_REF", "main")
 TOTAL_EPOCHS = os.environ.get("TOTAL_EPOCHS", "10")
-VQA_NUM_GPUS = os.environ.get("VQA_NUM_GPUS", "auto").strip().lower()
+VQA_NUM_GPUS = os.environ.get("VQA_NUM_GPUS", "2").strip().lower()
 RAW_DATA_ROOT = Path(os.environ.get("RAW_DATA_ROOT", "/kaggle/input/coco2014vqa/Dataset"))
 RESUME_ROOT = Path(
     os.environ.get("RESUME_ROOT", "/kaggle/input/multimodal-vqa-vilt-last6-t4x2-resume")
@@ -58,14 +64,168 @@ VQA_DOWNLOADS = {
     "v2_mscoco_val2014_annotations.json": "https://s3.amazonaws.com/cvmlp/vqa/mscoco/vqa/v2_Annotations_Val_mscoco.zip",
 }
 COCO_IMAGE_RE = re.compile(r"COCO_(?:train|val)2014_(\d{12})\.jpg$")
+HEARTBEAT_SECONDS = 60
+RUN_LOG_PATH = None
+RUN_STATUS_PATH = None
+RUN_STARTED_AT = None
+LAST_ACTIVITY_AT = 0.0
+CURRENT_STAGE = "startup"
+PROGRESS_LOCK = threading.Lock()
+
+
+def _timestamp() -> str:
+    return datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+
+def _write_status(state: str, stage: str, message: str) -> None:
+    if RUN_STATUS_PATH is None:
+        return
+    payload = {
+        "state": state,
+        "stage": stage,
+        "message": message,
+        "updated_at": _timestamp(),
+        "elapsed_seconds": round(time.monotonic() - RUN_STARTED_AT, 1) if RUN_STARTED_AT else 0.0,
+        "run_name": RUN_NAME,
+        "config": CONFIG_PATH,
+        "requested_gpus": VQA_NUM_GPUS,
+    }
+    temporary = RUN_STATUS_PATH.with_suffix(".json.tmp")
+    temporary.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+    temporary.replace(RUN_STATUS_PATH)
+
+
+def progress(message: str, *, state: str = "running", stage: Optional[str] = None) -> None:
+    global LAST_ACTIVITY_AT
+    stage = stage or CURRENT_STAGE
+    line = f"[{_timestamp()}] [{stage}] {message}"
+    with PROGRESS_LOCK:
+        LAST_ACTIVITY_AT = time.monotonic()
+        print(line, flush=True)
+        if RUN_LOG_PATH is not None:
+            with RUN_LOG_PATH.open("a", encoding="utf-8") as log_file:
+                log_file.write(line + "\n")
+                log_file.flush()
+        _write_status(state, stage, message)
+
+
+def initialize_progress_logging() -> None:
+    global RUN_LOG_PATH, RUN_STATUS_PATH, RUN_STARTED_AT, LAST_ACTIVITY_AT
+    RUN_LOG_PATH = CHECKPOINT_DIR / "runner.log"
+    RUN_STATUS_PATH = CHECKPOINT_DIR / "runner_status.json"
+    RUN_STARTED_AT = time.monotonic()
+    LAST_ACTIVITY_AT = RUN_STARTED_AT
+    RUN_LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
+    RUN_LOG_PATH.write_text("", encoding="utf-8")
+    progress("Kaggle runner process started; preparing the first preflight.", stage="bootstrap")
+
+
+@contextmanager
+def progress_stage(name: str):
+    global CURRENT_STAGE, LAST_ACTIVITY_AT
+    previous_stage = CURRENT_STAGE
+    CURRENT_STAGE = name
+    started = time.monotonic()
+    progress("stage started")
+    heartbeat_stop = threading.Event()
+
+    def report_if_idle() -> None:
+        while not heartbeat_stop.wait(HEARTBEAT_SECONDS):
+            with PROGRESS_LOCK:
+                idle_for = time.monotonic() - LAST_ACTIVITY_AT
+            if idle_for >= HEARTBEAT_SECONDS:
+                progress(
+                    f"stage still running; elapsed={time.monotonic() - started:.0f}s, "
+                    f"no log activity for {idle_for:.0f}s"
+                )
+
+    heartbeat = threading.Thread(target=report_if_idle, daemon=True)
+    heartbeat.start()
+    failed = False
+    try:
+        yield
+    except BaseException as exc:
+        failed = True
+        progress(f"stage failed after {time.monotonic() - started:.1f}s: {type(exc).__name__}: {exc}", state="failed")
+        raise
+    else:
+        progress(f"stage completed in {time.monotonic() - started:.1f}s")
+    finally:
+        heartbeat_stop.set()
+        heartbeat.join()
+        if not failed:
+            CURRENT_STAGE = previous_stage
+
+
+def _forward_process_output(stream, last_output: list[float]) -> None:
+    decoder = codecs.getincrementaldecoder("utf-8")("replace")
+    while True:
+        chunk = os.read(stream.fileno(), 4096)
+        if not chunk:
+            break
+        last_output[0] = time.monotonic()
+        text = decoder.decode(chunk)
+        if not text:
+            continue
+        with PROGRESS_LOCK:
+            global LAST_ACTIVITY_AT
+            LAST_ACTIVITY_AT = time.monotonic()
+            sys.stdout.write(text)
+            sys.stdout.flush()
+            if RUN_LOG_PATH is not None:
+                with RUN_LOG_PATH.open("a", encoding="utf-8") as log_file:
+                    log_file.write(text.replace("\r", "\n"))
+                    log_file.flush()
+    tail = decoder.decode(b"", final=True)
+    if tail:
+        with PROGRESS_LOCK:
+            LAST_ACTIVITY_AT = time.monotonic()
+            sys.stdout.write(tail)
+            sys.stdout.flush()
+            if RUN_LOG_PATH is not None:
+                with RUN_LOG_PATH.open("a", encoding="utf-8") as log_file:
+                    log_file.write(tail.replace("\r", "\n"))
+                    log_file.flush()
 
 
 def run(command, cwd=None):
-    print("+", " ".join(str(part) for part in command), flush=True)
-    subprocess.run([str(part) for part in command], cwd=cwd, check=True)
+    command = [str(part) for part in command]
+    command_text = " ".join(command)
+    progress(f"command started: {command_text}")
+    environment = os.environ.copy()
+    environment["PYTHONUNBUFFERED"] = "1"
+    environment["PYTHONFAULTHANDLER"] = "1"
+    started = time.monotonic()
+    process = subprocess.Popen(
+        command,
+        cwd=cwd,
+        env=environment,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        bufsize=0,
+    )
+    last_output = [time.monotonic()]
+    reader = threading.Thread(target=_forward_process_output, args=(process.stdout, last_output), daemon=True)
+    reader.start()
+    while True:
+        try:
+            return_code = process.wait(timeout=HEARTBEAT_SECONDS)
+            break
+        except subprocess.TimeoutExpired:
+            elapsed = time.monotonic() - started
+            silent_for = time.monotonic() - last_output[0]
+            if silent_for >= HEARTBEAT_SECONDS:
+                progress(f"command still running; elapsed={elapsed:.0f}s, no child output for {silent_for:.0f}s")
+    reader.join()
+    elapsed = time.monotonic() - started
+    if return_code:
+        progress(f"command failed with exit code {return_code} after {elapsed:.1f}s: {command_text}", state="failed")
+        raise subprocess.CalledProcessError(return_code, command)
+    progress(f"command completed in {elapsed:.1f}s: {command_text}")
 
 
 def training_launcher():
+    progress(f"checking visible CUDA devices; requested GPU count={VQA_NUM_GPUS}")
     probe = subprocess.run(
         ["python", "-c", "import torch; print(torch.cuda.device_count())"],
         cwd=REPO_ROOT,
@@ -76,12 +236,16 @@ def training_launcher():
     available = int(probe.stdout.strip().splitlines()[-1])
     requested = available if VQA_NUM_GPUS == "auto" else int(VQA_NUM_GPUS)
     if requested < 1 or requested > available:
-        raise ValueError(f"VQA_NUM_GPUS={requested} is invalid; this runtime exposes {available} CUDA GPU(s).")
-    print(f"Using {requested} of {available} visible GPU(s) for training", flush=True)
+        raise ValueError(
+            f"VQA_NUM_GPUS={requested} requested, but this Kaggle session exposes only {available} CUDA GPU(s). "
+            "Select GPU T4 x2 for this run, or set VQA_NUM_GPUS=1 to intentionally use one GPU."
+        )
+    progress(f"Using {requested} of {available} visible GPU(s) for training")
     if requested == 1:
-        return ["python", "train.py"]
+        return ["python", "-u", "train.py"]
     return [
         "python",
+        "-u",
         "-m",
         "torch.distributed.run",
         "--standalone",
@@ -91,6 +255,7 @@ def training_launcher():
 
 
 def torch_runtime_is_usable():
+    progress("checking the installed PyTorch build with a real CUDA tensor operation")
     probe = subprocess.run(
         [
             "python",
@@ -112,17 +277,17 @@ def torch_runtime_is_usable():
         capture_output=True,
     )
     if probe.stdout.strip():
-        print(probe.stdout.strip(), flush=True)
+        progress(probe.stdout.strip())
     if probe.returncode == 0:
         return True
     if probe.stderr.strip():
-        print(f"Preinstalled PyTorch probe failed: {probe.stderr.strip()}", flush=True)
+        progress(f"Preinstalled PyTorch probe failed: {probe.stderr.strip()}")
     return False
 
 
 def preinstalled_torch_is_usable():
     if os.environ.get("FORCE_TORCH_INSTALL", "").strip().lower() in {"1", "true", "yes"}:
-        print("FORCE_TORCH_INSTALL is enabled; installing the pinned PyTorch stack", flush=True)
+        progress("FORCE_TORCH_INSTALL is enabled; installing the pinned PyTorch stack")
         return False
     return torch_runtime_is_usable()
 
@@ -211,7 +376,33 @@ def validate_https_url(url):
 
 def download_https(url, output):
     validate_https_url(url)
-    urllib.request.urlretrieve(url, output)
+    output = Path(output)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    temporary = output.with_name(output.name + ".download")
+    request = urllib.request.Request(url, headers={"User-Agent": "multimodal-vqa-kaggle-runner/1.0"})
+    downloaded = 0
+    last_report = time.monotonic()
+    try:
+        with urllib.request.urlopen(request, timeout=60) as response, temporary.open("wb") as destination:
+            expected = int(response.headers.get("Content-Length", "0") or 0)
+            while True:
+                chunk = response.read(1024 * 1024)
+                if not chunk:
+                    break
+                destination.write(chunk)
+                downloaded += len(chunk)
+                if time.monotonic() - last_report >= 30:
+                    progress(f"downloaded {downloaded:,} bytes" + (f" of {expected:,}" if expected else ""))
+                    last_report = time.monotonic()
+        if downloaded == 0:
+            raise OSError(f"Download returned an empty response: {url}")
+        if expected and downloaded != expected:
+            raise OSError(f"Incomplete download: expected {expected} bytes, received {downloaded} bytes from {url}")
+        temporary.replace(output)
+        progress(f"download complete: {output.name} ({downloaded:,} bytes)")
+    except BaseException:
+        temporary.unlink(missing_ok=True)
+        raise
 
 
 def extract_zip_safely(archive_path, target):
@@ -240,14 +431,15 @@ def download_vqa_file(filename):
     DOWNLOAD_ROOT.mkdir(parents=True, exist_ok=True)
     existing = list(DOWNLOAD_ROOT.rglob(filename))
     if existing:
+        progress(f"using existing annotation file: {existing[0]}")
         return existing[0]
 
     url = VQA_DOWNLOADS[filename]
     zip_path = DOWNLOAD_ROOT / Path(url).name
     if not zip_path.exists():
-        print(f"Downloading {url}", flush=True)
+        progress(f"downloading VQA annotation archive: {Path(url).name}")
         download_https(url, zip_path)
-    print(f"Extracting {zip_path}", flush=True)
+    progress(f"extracting VQA annotation archive: {zip_path.name}")
     extract_zip_safely(zip_path, DOWNLOAD_ROOT)
     return find_file(DOWNLOAD_ROOT, filename)
 
@@ -262,11 +454,11 @@ def link_path(source, target):
 def restore_resume_artifacts():
     latest_checkpoint = CHECKPOINT_DIR / "latest.pt"
     if latest_checkpoint.exists():
-        print(f"Using checkpoint already present at {latest_checkpoint}", flush=True)
+        progress(f"using checkpoint already present at {latest_checkpoint}")
         return latest_checkpoint
 
     if not RESUME_ROOT.is_dir():
-        print(f"No resume dataset found at {RESUME_ROOT}; starting a new run", flush=True)
+        progress(f"no resume dataset found at {RESUME_ROOT}; starting a new run")
         return None
 
     source_latest = find_file(RESUME_ROOT, "latest.pt")
@@ -283,7 +475,7 @@ def restore_resume_artifacts():
         pass
 
     restored_latest = CHECKPOINT_DIR / source_latest.name
-    print(f"Restored resume checkpoint from {source_latest} to {restored_latest}", flush=True)
+    progress(f"restored resume checkpoint from {source_latest} to {restored_latest}")
     return restored_latest
 
 
@@ -318,8 +510,12 @@ def prepare_val_images(source_dir, target_dir, questions_path):
     if target_dir.is_symlink():
         target_dir.unlink()
     target_dir.mkdir(parents=True, exist_ok=True)
+    linked = 0
     for source in source_dir.glob("*.jpg"):
         link_path(source, target_dir / source.name)
+        linked += 1
+        if linked % 5000 == 0:
+            progress(f"val2014 image links prepared: {linked:,}")
 
     missing = []
     for image_id in sorted(required_image_ids(questions_path)):
@@ -327,7 +523,7 @@ def prepare_val_images(source_dir, target_dir, questions_path):
         if not (target_dir / filename).is_file():
             missing.append((image_id, filename))
 
-    print(f"val2014: repairing {len(missing)} missing referenced images", flush=True)
+    progress(f"val2014: repairing {len(missing):,} missing referenced images")
     for index, (_, filename) in enumerate(missing, start=1):
         target = target_dir / filename
         temporary = target.with_suffix(".jpg.part")
@@ -343,7 +539,7 @@ def prepare_val_images(source_dir, target_dir, questions_path):
                     raise
                 time.sleep(2**attempt)
         if index % 25 == 0 or index == len(missing):
-            print(f"val2014 repair progress: {index}/{len(missing)}", flush=True)
+            progress(f"val2014 repair progress: {index:,}/{len(missing):,}")
     return target_dir
 
 
@@ -393,7 +589,7 @@ def normalize_vqa_data():
         NORMALIZED_DATA_ROOT / "v2_OpenEnded_mscoco_val2014_questions.json",
         NORMALIZED_DATA_ROOT / "v2_mscoco_val2014_annotations.json",
     )
-    print(f"Normalized VQA data root: {NORMALIZED_DATA_ROOT}", flush=True)
+    progress(f"normalized VQA data root: {NORMALIZED_DATA_ROOT}")
     return NORMALIZED_DATA_ROOT
 
 
@@ -438,85 +634,112 @@ def archive_artifacts():
     archive = ARCHIVE_PATH.with_suffix(".tar.gz")
     archive.unlink(missing_ok=True)
     shutil.make_archive(str(ARCHIVE_PATH), "gztar", root_dir=EXPORT_ROOT)
-    print(f"Artifacts archived at {archive}", flush=True)
+    progress(f"artifacts archived at {archive}")
 
 
 def main():
-    run(["nvidia-smi"])
     WORK_ROOT.mkdir(parents=True, exist_ok=True)
     CHECKPOINT_DIR.mkdir(parents=True, exist_ok=True)
-
-    if not REPO_ROOT.exists():
-        run(["git", "clone", "https://github.com/dongtingshuo/multimodal-vqa.git", REPO_ROOT])
-
-    run(["git", "fetch", "--all", "--tags"], cwd=REPO_ROOT)
-    run(["git", "checkout", GIT_REF], cwd=REPO_ROOT)
-    install_training_dependencies()
-    os.environ["WANDB_MODE"] = "disabled"
-    print("W&B disabled for Kaggle runs; using local CSV/PNG/JSON artifacts only.", flush=True)
-    latest_checkpoint = restore_resume_artifacts()
-    data_root = normalize_vqa_data()
-
-    run(
-        [
-            "python",
-            "scripts/validate_vqa_data.py",
-            "--root",
-            data_root,
-            "--sample-images",
-            "20",
-            "--strict-full",
-        ],
-        cwd=REPO_ROOT,
+    initialize_progress_logging()
+    os.environ["PYTHONUNBUFFERED"] = "1"
+    os.environ["PYTHONFAULTHANDLER"] = "1"
+    progress(
+        f"run={RUN_NAME}; config={CONFIG_PATH}; git_ref={GIT_REF}; "
+        f"data_source={RAW_DATA_ROOT}; resume_source={RESUME_ROOT}"
     )
-    train_command = training_launcher() + [
-        "--config",
-        CONFIG_PATH,
-        "--device",
-        "cuda",
-        "--data-root",
-        data_root,
-        "--answer-vocab-path",
-        ANSWER_VOCAB,
-        "--checkpoint-dir",
-        CHECKPOINT_DIR,
-        "--epochs",
-        TOTAL_EPOCHS,
-        "--no-wandb",
-    ]
-    if latest_checkpoint is not None:
-        train_command.extend(["--resume", latest_checkpoint])
 
-    completed_epochs = completed_training_epochs()
-    if latest_checkpoint is not None and completed_epochs >= int(TOTAL_EPOCHS):
-        print(
-            f"Training already completed {completed_epochs}/{TOTAL_EPOCHS} epochs; skipping to evaluation",
-            flush=True,
+    with progress_stage("hardware preflight"):
+        run(["nvidia-smi", "-L"])
+        run(["nvidia-smi", "--query-gpu=index,name,memory.total", "--format=csv,noheader"])
+
+    with progress_stage("source checkout"):
+        if not REPO_ROOT.exists():
+            run(["git", "clone", "https://github.com/dongtingshuo/multimodal-vqa.git", REPO_ROOT])
+        run(["git", "fetch", "--all", "--tags"], cwd=REPO_ROOT)
+        run(["git", "checkout", GIT_REF], cwd=REPO_ROOT)
+        run(["git", "rev-parse", "HEAD"], cwd=REPO_ROOT)
+
+    with progress_stage("runtime and dependencies"):
+        install_training_dependencies()
+        os.environ["WANDB_MODE"] = "disabled"
+        progress("W&B disabled; using local CSV/PNG/JSON artifacts only.")
+        train_launcher = training_launcher()
+
+    with progress_stage("checkpoint restore"):
+        latest_checkpoint = restore_resume_artifacts()
+
+    with progress_stage("dataset preparation"):
+        data_root = normalize_vqa_data()
+
+    with progress_stage("strict data validation"):
+        run(
+            [
+                "python",
+                "-u",
+                "scripts/validate_vqa_data.py",
+                "--root",
+                data_root,
+                "--sample-images",
+                "20",
+                "--strict-full",
+            ],
+            cwd=REPO_ROOT,
         )
-    else:
-        run(train_command, cwd=REPO_ROOT)
 
-    run(
-        [
-            "python",
-            "evaluate.py",
+    with progress_stage("distributed training"):
+        train_command = train_launcher + [
             "--config",
             CONFIG_PATH,
-            "--checkpoint",
-            CHECKPOINT_DIR / "best.pt",
             "--device",
             "cuda",
             "--data-root",
             data_root,
-            "--predictions-output",
-            PREDICTIONS_PATH,
-        ],
-        cwd=REPO_ROOT,
-    )
-    run_official_evaluation(data_root)
+            "--answer-vocab-path",
+            ANSWER_VOCAB,
+            "--checkpoint-dir",
+            CHECKPOINT_DIR,
+            "--epochs",
+            TOTAL_EPOCHS,
+            "--no-wandb",
+        ]
+        if latest_checkpoint is not None:
+            train_command.extend(["--resume", latest_checkpoint])
 
-    archive_artifacts()
+        completed_epochs = completed_training_epochs()
+        if latest_checkpoint is not None and completed_epochs >= int(TOTAL_EPOCHS):
+            progress(f"training already completed {completed_epochs}/{TOTAL_EPOCHS} epochs; skipping to evaluation")
+        else:
+            run(train_command, cwd=REPO_ROOT)
+
+    with progress_stage("prediction and official evaluation"):
+        run(
+            [
+                "python",
+                "-u",
+                "evaluate.py",
+                "--config",
+                CONFIG_PATH,
+                "--checkpoint",
+                CHECKPOINT_DIR / "best.pt",
+                "--device",
+                "cuda",
+                "--data-root",
+                data_root,
+                "--predictions-output",
+                PREDICTIONS_PATH,
+            ],
+            cwd=REPO_ROOT,
+        )
+        run_official_evaluation(data_root)
+
+    with progress_stage("artifact packaging"):
+        archive_artifacts()
+    progress("Kaggle run completed successfully.", state="completed", stage="complete")
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except BaseException as exc:
+        progress(f"run failed: {type(exc).__name__}: {exc}", state="failed")
+        raise

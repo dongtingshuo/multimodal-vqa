@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import io
 import json
+import sys
 import zipfile
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -17,11 +20,21 @@ def test_missing_coco_images_use_the_official_s3_bucket(tmp_path: Path, monkeypa
     questions.write_text(json.dumps({"questions": [{"image_id": 42}]}), encoding="utf-8")
     requested_urls = []
 
-    def fake_download(url, output):
-        requested_urls.append(url)
-        Path(output).write_bytes(b"jpeg")
+    class FakeResponse(io.BytesIO):
+        headers = {"Content-Length": "4"}
 
-    monkeypatch.setattr(run_kaggle_finetune.urllib.request, "urlretrieve", fake_download)
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            self.close()
+
+    def fake_download(request, timeout):
+        requested_urls.append(request.full_url)
+        assert timeout == 60
+        return FakeResponse(b"jpeg")
+
+    monkeypatch.setattr(run_kaggle_finetune.urllib.request, "urlopen", fake_download)
     run_kaggle_finetune.prepare_val_images(source, target, questions)
 
     assert requested_urls == [
@@ -68,6 +81,68 @@ def test_kaggle_runner_has_no_wandb_secret_path() -> None:
     assert "kaggle_secrets" not in source
     assert "WANDB_API_KEY" not in source
     assert '"--no-wandb"' in source
+
+
+def test_kaggle_runner_streams_child_output_to_console_and_run_log(tmp_path: Path, monkeypatch, capsys) -> None:
+    log_path = tmp_path / "runner.log"
+    monkeypatch.setattr(run_kaggle_finetune, "RUN_LOG_PATH", log_path)
+
+    run_kaggle_finetune.run(
+        [
+            sys.executable,
+            "-u",
+            "-c",
+            "import sys; print('child stdout'); print('child stderr', file=sys.stderr); sys.stdout.write('step=1\\r'); sys.stdout.flush()",
+        ],
+        cwd=tmp_path,
+    )
+
+    output = capsys.readouterr().out
+    assert "child stdout" in output
+    assert "child stderr" in output
+    assert "step=1" in output
+    assert "child stdout" in log_path.read_text(encoding="utf-8")
+    assert "step=1" in log_path.read_text(encoding="utf-8")
+
+
+def test_progress_stage_records_current_state(tmp_path: Path, monkeypatch, capsys) -> None:
+    log_path = tmp_path / "runner.log"
+    status_path = tmp_path / "runner_status.json"
+    monkeypatch.setattr(run_kaggle_finetune, "RUN_LOG_PATH", log_path)
+    monkeypatch.setattr(run_kaggle_finetune, "RUN_STATUS_PATH", status_path)
+    monkeypatch.setattr(run_kaggle_finetune, "RUN_STARTED_AT", run_kaggle_finetune.time.monotonic())
+
+    with run_kaggle_finetune.progress_stage("test-stage"):
+        pass
+
+    status = json.loads(status_path.read_text(encoding="utf-8"))
+    assert status["state"] == "running"
+    assert status["stage"] == "test-stage"
+    assert "stage completed" in status["message"]
+    assert "test-stage" in log_path.read_text(encoding="utf-8")
+
+
+def test_t4x2_runner_fails_fast_when_only_one_gpu_is_visible(monkeypatch) -> None:
+    monkeypatch.setattr(run_kaggle_finetune, "VQA_NUM_GPUS", "2")
+    monkeypatch.setattr(
+        run_kaggle_finetune.subprocess,
+        "run",
+        lambda *_args, **_kwargs: SimpleNamespace(stdout="1\n"),
+    )
+
+    with pytest.raises(ValueError, match="exposes only 1 CUDA GPU"):
+        run_kaggle_finetune.training_launcher()
+
+
+def test_runner_can_explicitly_use_one_gpu(monkeypatch) -> None:
+    monkeypatch.setattr(run_kaggle_finetune, "VQA_NUM_GPUS", "1")
+    monkeypatch.setattr(
+        run_kaggle_finetune.subprocess,
+        "run",
+        lambda *_args, **_kwargs: SimpleNamespace(stdout="2\n"),
+    )
+
+    assert run_kaggle_finetune.training_launcher() == ["python", "-u", "train.py"]
 
 
 def test_kaggle_zip_extraction_rejects_traversal(tmp_path: Path) -> None:

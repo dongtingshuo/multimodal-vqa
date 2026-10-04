@@ -142,9 +142,13 @@ The script uses `sagnikkayalcse52/coco2014vqa` as its initial COCO image source,
 
 脚本将 `sagnikkayalcse52/coco2014vqa` 作为初始 COCO 图片源，下载官方 VQA v2 JSON；若镜像缺少验证集引用图片，则从 COCO 官方图片地址补齐，随后按官方 train/val 数量执行严格校验。任务默认运行 `configs/kaggle_vilt_last6_t4x2.yaml`，远程脚本运行时禁用 W&B，导出全部 214,354 条验证预测，运行官方 VQA toolkit，并打包所有产物。只有在明确进行其他实验时才覆盖 `CONFIG_PATH` 和 `RUN_NAME`。
 
-The runner automatically launches DDP when more than one CUDA GPU is attached. Set the Kaggle notebook environment variable `VQA_NUM_GPUS=1` to use one GPU or `VQA_NUM_GPUS=2` to request two; the default `auto` uses all visible GPUs. The configured effective batch is preserved across GPU counts.
+This Kaggle kernel targets GPU T4 x2 and defaults to requiring two visible CUDA GPUs; it launches DDP across both cards and fails before training if the session exposes fewer. Set `VQA_NUM_GPUS=1` to intentionally run the same code on one GPU, or `VQA_NUM_GPUS=auto` to use every visible GPU. The configured effective batch is preserved across GPU counts. Kaggle's kernel metadata uses `machine_shape: NvidiaTeslaT4` for the GPU T4 x2 accelerator ([Kaggle CLI metadata reference](https://github.com/Kaggle/kaggle-cli/blob/main/docs/kernels_metadata.md)).
 
-若 Kaggle 实例挂载多张 CUDA GPU，runner 会自动使用 DDP。可设置 Notebook 环境变量 `VQA_NUM_GPUS=1` 使用单卡，或 `VQA_NUM_GPUS=2` 指定双卡；默认 `auto` 使用全部可见 GPU。程序会保持配置的有效 batch 不变。
+该 Kaggle kernel 面向 GPU T4 x2，默认要求检测到两张 CUDA GPU，并在双卡上启动 DDP；如果会话实际只分配到一张卡，会在训练前明确失败。可设置 `VQA_NUM_GPUS=1` 明确使用单卡，或设为 `VQA_NUM_GPUS=auto` 使用所有可见 GPU。不同卡数下都会尽量保持配置的有效 batch 不变。Kaggle kernel metadata 通过 `machine_shape: NvidiaTeslaT4` 选择 GPU T4 x2 加速器（见 [Kaggle CLI metadata reference](https://github.com/Kaggle/kaggle-cli/blob/main/docs/kernels_metadata.md)）。
+
+The script writes timestamped stage and child-process output to Kaggle's live log and to `runner.log` plus `runner_status.json` under the run checkpoint directory. It emits a heartbeat every 60 seconds during quiet subprocesses, and Python subprocesses run unbuffered. If a Kaggle session is marked running but the first `bootstrap` line never appears, the source script has not produced evidence that it reached its entrypoint; check Kaggle's Active Events/session allocation before diagnosing the model or DataLoader.
+
+脚本会把带时间戳的阶段状态和子进程输出写入 Kaggle 实时日志，并保存到 checkpoint 目录下的 `runner.log` 与 `runner_status.json`。子进程安静超过 60 秒时会输出心跳，Python 子进程使用无缓冲模式。如果 Kaggle 显示运行中，却连第一条 `bootstrap` 都没有，当前证据不能说明训练代码已进入入口；应先检查 Kaggle 的 Active Events 和会话资源分配，再判断模型或 DataLoader 是否卡住。
 
 The runner reuses Kaggle's preinstalled `torch` and `torchvision` only after a real CUDA tensor operation succeeds on the assigned GPU. This catches architecture mismatches such as a P100 (`sm_60`) paired with a runtime built only for `sm_70` and newer. When the probe fails, the pinned stack is installed into an isolated working directory and activated through `PYTHONPATH`, leaving Kaggle's system packages untouched. Set `FORCE_TORCH_INSTALL=1` to force this fallback; its location and versions can be overridden with `PYTORCH_RUNTIME_DIR`, `TORCH_VERSION`, `TORCHVISION_VERSION`, and `PYTORCH_INDEX_URL`.
 

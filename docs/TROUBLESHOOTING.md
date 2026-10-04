@@ -88,6 +88,16 @@ On Kaggle, keep input data under `/kaggle/input` and write checkpoints only unde
 
 在 Kaggle 中，输入数据应保留在 `/kaggle/input`，checkpoint 只能写入 `/kaggle/working`。详见 [KAGGLE.md](KAGGLE.md)。
 
+## Kaggle Run Has No Logs / Kaggle 运行没有日志
+
+Check the Kaggle kernel status and its execution log before changing the model. The maintained runner prints a `bootstrap` line immediately, then reports each setup, data, training, and evaluation stage. A quiet child process emits a heartbeat every 60 seconds; the same output is saved to `runner.log` and its current stage to `runner_status.json` under the run directory.
+
+修改模型前，先检查 Kaggle kernel 状态和执行日志。维护的 runner 会立即打印 `bootstrap`，随后逐阶段报告环境、数据、训练和评估状态；子进程连续 60 秒无输出时会发出心跳。相同日志保存在运行目录的 `runner.log` 中，当前阶段保存在 `runner_status.json` 中。
+
+If the run is marked active but the log has no `bootstrap` line, there is no evidence that the Python entrypoint started. Check Kaggle Active Events and accelerator allocation; do not infer that training is progressing from the status label alone. If the log reaches `distributed training`, inspect the last heartbeat and child output to locate the actual slow or blocked command.
+
+如果任务显示运行中，但日志没有 `bootstrap`，就没有证据表明 Python 入口已经启动。先检查 Kaggle Active Events 和加速器分配情况；不要只凭状态标签推断训练正在推进。如果日志已到 `distributed training`，根据最后一条心跳和子进程输出定位具体慢步骤或阻塞命令。
+
 ## Resume Is Rejected / 断点续训被拒绝
 
 Training resume requires a format-v3 `latest.pt`. Released legacy checkpoints remain valid for inference but do not contain complete scheduler, AMP, RNG, and history state. A resume is also rejected when model architecture, preprocessing, optimizer, accumulation, or stage schedule differs from the saved run.
