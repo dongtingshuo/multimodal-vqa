@@ -85,6 +85,6 @@ Local/Kaggle artifacts and embedded checkpoint configuration are the source of r
 
 ## Dependency Compatibility / 依赖兼容策略
 
-The maintained ViLT training path uses `transformers>=4.40,<4.49`; the AutoDL training environment pins `4.48.3`, and the Kaggle runner uses the same compatible minor range. Keep this boundary until a deliberate upgrade has passed checkpoint load/inference, processor compatibility, gradient-checkpointing, and a real one-epoch training smoke run. Do not independently widen only one requirements file.
+The supported runtime is Python 3.10+ with PyTorch 2.5.1+ and Transformers 5.10+. Root requirements use `transformers>=5.10,<6.0`; AutoDL and Kaggle use the same Transformers range, and the Kaggle fallback pairs PyTorch 2.5.1 with torchvision 0.20.1 on CUDA 12.1. Keep these constraints aligned across every install path. Before changing the Transformers major version again, verify checkpoint load/inference, processor compatibility, gradient-checkpointing, and a real one-epoch training smoke run.
 
-当前维护的 ViLT 训练路径使用 `transformers>=4.40,<4.49`；AutoDL 训练环境固定为 `4.48.3`，Kaggle runner 使用相同兼容次版本范围。只有在 checkpoint 加载/推理、processor 兼容性、gradient checkpointing 和真实单 epoch 训练 smoke run 全部通过后才升级。禁止只单独放宽某一个依赖文件。
+支持的运行环境为 Python 3.10+、PyTorch 2.5.1+ 和 Transformers 5.10+。根目录依赖使用 `transformers>=5.10,<6.0`；AutoDL 和 Kaggle 使用相同 Transformers 范围，Kaggle 回退安装使用 CUDA 12.1 对应的 PyTorch 2.5.1 与 torchvision 0.20.1。所有安装入口必须保持约束一致。下次升级 Transformers 主版本前，须验证 checkpoint 加载/推理、processor 兼容性、gradient checkpointing 和真实单 epoch 训练 smoke run。

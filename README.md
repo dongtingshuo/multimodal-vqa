@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/dongtingshuo/multimodal-vqa/actions/workflows/ci.yml/badge.svg)](https://github.com/dongtingshuo/multimodal-vqa/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Python 3.9+](https://img.shields.io/badge/Python-3.9%2B-3776AB.svg)](pyproject.toml)
+[![Python 3.10+](https://img.shields.io/badge/Python-3.10%2B-3776AB.svg)](pyproject.toml)
 
 基于多模态融合的视觉问答系统。工程提供数据准备、模型训练、评估、命令行推理、Gradio Web 演示、模型变体对比和错误分析流程，默认面向 VQA v2.0 与 COCO 2014 图像数据。
 
@@ -96,9 +96,9 @@ ViLT 任务已按配置在 epoch 7 触发早停，最佳权重来自 epoch 5，�
 
 ## Environment / 环境准备
 
-Python 3.9+ is recommended. For GPU training, use a CUDA-enabled PyTorch build that matches your NVIDIA driver.
+Python 3.10+ is required. For GPU training, use a CUDA-enabled PyTorch build that matches your NVIDIA driver.
 
-建议使用 Python 3.9+。如果进行 GPU 训练，请安装与 NVIDIA 驱动匹配的 CUDA 版 PyTorch。
+需要 Python 3.10+。如果进行 GPU 训练，请安装与 NVIDIA 驱动匹配的 CUDA 版 PyTorch。
 
 ```bash
 python -m venv .venv

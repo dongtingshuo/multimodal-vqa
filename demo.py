@@ -138,7 +138,7 @@ def main() -> None:
         server_port=server_port,
         inbrowser=args.inbrowser,
         share=args.share,
-        show_api=False,
+        footer_links=["gradio", "settings"],
     )
 
 

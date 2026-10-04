@@ -27,9 +27,9 @@ RAW_DATA_ROOT = Path(os.environ.get("RAW_DATA_ROOT", "/kaggle/input/coco2014vqa/
 RESUME_ROOT = Path(
     os.environ.get("RESUME_ROOT", "/kaggle/input/multimodal-vqa-vilt-last6-t4x2-resume")
 )
-TORCH_VERSION = os.environ.get("TORCH_VERSION", "2.4.1+cu121")
-TORCHVISION_VERSION = os.environ.get("TORCHVISION_VERSION", "0.19.1+cu121")
-TRANSFORMERS_SPEC = os.environ.get("TRANSFORMERS_SPEC", "transformers>=4.40,<4.49")
+TORCH_VERSION = os.environ.get("TORCH_VERSION", "2.5.1+cu121")
+TORCHVISION_VERSION = os.environ.get("TORCHVISION_VERSION", "0.20.1+cu121")
+TRANSFORMERS_SPEC = os.environ.get("TRANSFORMERS_SPEC", "transformers>=5.10,<6.0")
 PYTORCH_INDEX_URL = os.environ.get("PYTORCH_INDEX_URL", "https://download.pytorch.org/whl/cu121")
 PYTORCH_RUNTIME_DIR = Path(
     os.environ.get("PYTORCH_RUNTIME_DIR", WORK_ROOT / "pytorch-runtime")
