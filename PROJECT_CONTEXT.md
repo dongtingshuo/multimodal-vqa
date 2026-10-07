@@ -46,15 +46,16 @@ Maintain a reproducible PyTorch visual question answering system for VQA v2.0 an
 - The main runner now falls back to official COCO S3 ZIPs when neither a complete mounted dataset nor packed outputs are present. Downloads use HTTPS Range requests, retain partial files across retryable network errors, log byte progress, extract each split under `/tmp`, remove the ZIP after successful extraction, and validate the exact 82,783/40,504 image counts.
 - Kaggle main kernel Version 31 ran a network-only smoke with no data sources attached: Python bootstrap logs appeared immediately, both Tesla T4 GPUs were visible and passed CUDA tensor operations, and COCO HEAD requests returned 200 for train (13,510,573,713 bytes) and validation (6,645,013,297 bytes) archives. No image download or training occurred.
 - Production mode was restored and saved as Kaggle Version 32 without running. Its pulled remote metadata has empty `dataset_sources` and `kernel_sources`, GPU enabled, and `machine_shape: NvidiaTeslaT4`.
+- Kaggle Version 33 is the current production run. It has cloned GitHub commit `35c4d92`, detected both Tesla T4 GPUs, downloaded and strictly validated the complete COCO/VQA data (82,783 train images, 40,504 validation images; 443,757 train and 214,354 validation annotations), and entered epoch 1 of 10 with W&B disabled. No compatible resume checkpoint was mounted, so this run started fresh from `dandelin/vilt-b32-mlm-itm`. No completed-epoch metrics are available yet.
 - The direct-download path transfers about 20.2 GB per fresh session. Partial HTTP downloads can resume within the current session; a new Kaggle session may need to download the archives again.
 - Checkpoint restore support remains in the runner. No compatible checkpoint source is attached: the available P100 ViLT checkpoint uses a different all-layer configuration, while the other checkpoint is `strong_cross_attention`, not the current ViLT last-six-layer T4x2 setup. Do not silently reuse either checkpoint.
 - Local verification: Ruff passed; the full suite passed 87 tests in the existing `pytorch` environment (Python 3.9, below the declared minimum); 5 upstream deprecation warnings remain. `git diff --check` passed.
-- No model training or full image download has started in this repair cycle. Version 32 is ready but was not run.
+- Version 33 has started full two-GPU training; review its completed metrics and retrieve its checkpoint/output package after the Kaggle run finishes.
 - Keep existing untracked `artifacts/` user data; do not clean it as part of routine work.
 
 ## Prioritized TODO / 优先事项
 
-1. Run Kaggle Version 32 when ready; expect the runner to download about 20.2 GB of official COCO ZIPs before training, with visible progress and within-session HTTP resume.
+1. Monitor Kaggle Version 33 through completion and verify its metrics/checkpoint before updating published model claims.
 2. Before resuming from a checkpoint, attach and verify one produced by the exact ViLT last-six-layer T4x2 configuration; otherwise the runner starts fresh from configured pretrained weights.
 3. If repeated session restarts make direct downloads too costly, evaluate publishing the two archives as a private Kaggle Dataset and validate that mount path before switching the main kernel back to data inputs.
 4. Keep model-card and evaluation claims tied to checked-in reports and actual checkpoint provenance.
