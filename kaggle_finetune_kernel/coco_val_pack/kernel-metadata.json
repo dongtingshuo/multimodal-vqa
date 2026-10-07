@@ -1,0 +1,16 @@
+{
+  "id": "dongtingshuo/multimodal-vqa-coco-val-pack",
+  "title": "multimodal-vqa-coco-val-pack",
+  "code_file": "../pack_coco_vqa_val.py",
+  "language": "python",
+  "kernel_type": "script",
+  "is_private": true,
+  "enable_gpu": false,
+  "enable_internet": false,
+  "machine_shape": "",
+  "dataset_sources": [
+    "sagnikkayalcse52/coco2014vqa"
+  ],
+  "competition_sources": [],
+  "kernel_sources": []
+}
