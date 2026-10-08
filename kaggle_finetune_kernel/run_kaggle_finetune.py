@@ -72,6 +72,8 @@ PACKAGED_SPLITS = {
 RESUME_ROOT = Path(
     os.environ.get("RESUME_ROOT", "/kaggle/input/multimodal-vqa-vilt-last6-t4x2-resume")
 )
+RESUME_DATASET_SLUG = "multimodal-vqa-vilt-last6-t4x2-resume"
+RESUME_DATASET_OWNER = "dongtingshuo"
 TORCH_VERSION = os.environ.get("TORCH_VERSION", "2.5.1+cu121")
 TORCHVISION_VERSION = os.environ.get("TORCHVISION_VERSION", "0.20.1+cu121")
 TRANSFORMERS_SPEC = os.environ.get("TRANSFORMERS_SPEC", "transformers>=5.10,<6.0")
@@ -841,26 +843,51 @@ def link_path(source, target):
     target.symlink_to(source)
 
 
+def resolve_resume_root(input_root=Path("/kaggle/input")):
+    candidates = (
+        RESUME_ROOT,
+        input_root / RESUME_DATASET_SLUG,
+        input_root / RESUME_DATASET_OWNER / RESUME_DATASET_SLUG,
+        input_root / "datasets" / RESUME_DATASET_OWNER / RESUME_DATASET_SLUG,
+    )
+    seen = set()
+    for candidate in candidates:
+        candidate = Path(candidate)
+        if candidate in seen or not candidate.is_dir():
+            continue
+        seen.add(candidate)
+        try:
+            find_file(candidate, "latest.pt")
+        except FileNotFoundError:
+            continue
+        return candidate
+    return None
+
+
 def restore_resume_artifacts():
     latest_checkpoint = CHECKPOINT_DIR / "latest.pt"
     if latest_checkpoint.exists():
         progress(f"using checkpoint already present at {latest_checkpoint}")
         return latest_checkpoint
 
-    if not RESUME_ROOT.is_dir():
-        progress(f"no resume dataset found at {RESUME_ROOT}; starting a new run")
+    resume_root = resolve_resume_root()
+    if resume_root is None:
+        progress(
+            f"no resume checkpoint found at {RESUME_ROOT} or known Kaggle input mounts; "
+            "starting a new run"
+        )
         return None
 
-    source_latest = find_file(RESUME_ROOT, "latest.pt")
+    source_latest = find_file(resume_root, "latest.pt")
     for filename in RESUME_FILES:
         try:
-            source = find_file(RESUME_ROOT, filename)
+            source = find_file(resume_root, filename)
         except FileNotFoundError:
             continue
         shutil.copy2(source, CHECKPOINT_DIR / filename)
 
     try:
-        shutil.copy2(find_file(RESUME_ROOT, "answer_vocab.json"), ANSWER_VOCAB)
+        shutil.copy2(find_file(resume_root, "answer_vocab.json"), ANSWER_VOCAB)
     except FileNotFoundError:
         pass
 

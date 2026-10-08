@@ -479,3 +479,21 @@ def test_download_coco_images_extracts_and_reuses_official_archives(
     assert len(run_kaggle_finetune.available_image_ids(root / "val2014")) == 1
     assert not (root / "train2014.zip").exists()
     assert not (root / "val2014.zip").exists()
+
+
+def test_resolve_resume_root_finds_owner_scoped_kaggle_dataset_mount(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    input_root = tmp_path / "input"
+    dataset_root = (
+        input_root
+        / "datasets"
+        / run_kaggle_finetune.RESUME_DATASET_OWNER
+        / run_kaggle_finetune.RESUME_DATASET_SLUG
+    )
+    dataset_root.mkdir(parents=True)
+    (dataset_root / "latest.pt").touch()
+    monkeypatch.setattr(run_kaggle_finetune, "RESUME_ROOT", tmp_path / "not-mounted")
+
+    assert run_kaggle_finetune.resolve_resume_root(input_root) == dataset_root
