@@ -124,7 +124,7 @@ strong 模型实验：第 12 版暴露续训问题，第 13 版完成训练，�
 | Staged `cross_attention` | 12 | 0.5239 | 0.6233 | Not evaluated | Archived comparison release |
 | `strong_cross_attention` | 22 | 0.4967 | 0.5955 | Not evaluated | Not promoted |
 | ViLT seed 42 | 5 | **0.6126** | **0.7101** | **68.42** | Recommended engineering checkpoint |
-| ViLT T4x2 continuation (Kaggle V34) | 4 | 0.6084 | 0.7067 | Pending | Not promoted; no validation gain |
+| ViLT T4x2 continuation (Kaggle V34) | 4 | 0.6084 | 0.7067 | 68.08 | Not promoted; 0.34 points below recommended |
 
 The ViLT run completed through epoch 7, stopped under the configured early-stopping rule, and
 exported one prediction for every validation question. Official repository commit `a013f004`
@@ -418,13 +418,17 @@ Training VQA continued to rise while validation loss rose and validation VQA fel
 
 训练 VQA 持续上升，但验证 loss 同时上升、验证 VQA 下降，说明当前训练方案已出现过拟合；不应原样继续续训。配置的 patience 在 epoch 6 触发早停。运行摘要记录该续训实验累计训练 50,351 秒，约 14.0 小时。
 
-The internal evaluator scored 209,608 validation examples, and the export contains 214,354 predictions. The official VQA score is **pending**: the Kaggle run failed while converting the upstream Python 2 toolkit because Python 3.12 no longer provides `lib2to3`. This internal VQA score must not be presented as an official benchmark score.
+The internal evaluator scored 209,608 validation examples; the prediction export contains all 214,354 validation questions. The upstream [VQA evaluation toolkit](https://github.com/GT-Vision-Lab/VQA) was converted with Fissix and run against the complete public VQA v2 validation annotations. The official evaluator returned **68.08 overall** on two runs. Question IDs matched exactly across questions, annotations, and predictions. Per-answer-type scores were 60.19 (`other`), 85.35 (`yes/no`), and 48.22 (`number`); the complete question-type breakdown is in [the metrics artifact](evaluation/kaggle-v34-official-vqa-metrics.json).
 
-内部 evaluator 对 209,608 条验证样本计分，预测导出包含 214,354 条结果。官方 VQA 分数仍为**待评测**：Kaggle 运行在转换上游 Python 2 toolkit 时失败，因为 Python 3.12 已不再提供 `lib2to3`。不得将内部 VQA score 写成官方 benchmark 分数。
+内部 evaluator 对 209,608 条验证样本计分；预测导出覆盖完整的 214,354 条验证问题。我们使用 Fissix 转换上游 [VQA 官方评测工具](https://github.com/GT-Vision-Lab/VQA)，并在完整公开 VQA v2 验证标注上运行，重复两次均得到 **68.08 overall**。questions、annotations 与 predictions 的 question ID 完全一致。按答案类型的分数为 `other` 60.19、`yes/no` 85.35、`number` 48.22；完整问题类型分项见[指标文件](evaluation/kaggle-v34-official-vqa-metrics.json)。
 
-The downloaded Version 34 result directory contained a zero-byte `best.pt`, although the Kaggle log confirms that evaluation loaded the checkpoint and completed. The verified Version 33 epoch-4 checkpoint has matching configuration and exact best metrics; it is the recoverable selected checkpoint. The Version 34 `latest.pt` is an epoch-6 continuation state and must not be substituted as the best model. Version 34 is not promoted because it did not improve the current recommended checkpoint; its official score remains pending.
+The result is 0.34 percentage points below the recommended ViLT checkpoint's official validation score of 68.42. Its internal accuracy (0.6084), VQA score (0.7067), and top-5 VQA score (0.8897) are also below the recommended checkpoint (0.6126, 0.7101, and 0.8908). Therefore, Version 34 is **not promoted**, and the existing recommended checkpoint remains unchanged. This is an official validation-set evaluation, not a test-dev/test-standard leaderboard submission.
 
-下载的 Version 34 结果目录中 `best.pt` 为 0 字节，但 Kaggle 日志确认评测阶段成功加载 checkpoint 并完成内部验证。已验证的 Version 33 epoch 4 checkpoint 配置相同且最佳指标完全一致，可作为可恢复的最佳权重。Version 34 的 `latest.pt` 是 epoch 6 的续训状态，不能替代最佳模型。由于 Version 34 未超过当前推荐 checkpoint，且官方分数仍待评测，因此不予晋升。
+该结果比当前推荐 ViLT checkpoint 的官方验证分数 68.42 低 0.34 个百分点。其内部 accuracy（0.6084）、VQA score（0.7067）和 top-5 VQA score（0.8897）也低于推荐 checkpoint（分别为 0.6126、0.7101 和 0.8908）。因此 Version 34 **不予晋升**，现有推荐 checkpoint 保持不变。该结果是官方验证集评测，不是 test-dev/test-standard 榜单提交成绩。
+
+The downloaded Version 34 result directory contained a zero-byte `best.pt`. The selected weights were recovered from the verified Version 33 epoch-4 checkpoint, which matches the Version 34 configuration and selected metrics; its SHA-256 is `947551915da46f6225f2574c217728b8125491608fa55a54aabd8625fd5561c5`. The V34 epoch-6 `latest.pt` is a continuation state and is not the selected best checkpoint. Evaluation provenance: questions SHA-256 `f34d9c9909dea76700d361baddd63dd47b4494945097459b542d9fe840244811`; annotations SHA-256 `0564650e712b34c246e4ad142894692bf2e45dee8e9cc6ebb2cedbe85731c4bf`; predictions SHA-256 `febdf25cc960dd509e823af025d367020ddfcc328ab74dacb38c4a67ccf886b1`.
+
+下载的 Version 34 结果目录中 `best.pt` 为 0 字节。最终选用已验证的 Version 33 epoch 4 checkpoint 恢复权重，其配置和 Version 34 选中指标一致；SHA-256 为 `947551915da46f6225f2574c217728b8125491608fa55a54aabd8625fd5561c5`。V34 epoch 6 的 `latest.pt` 是续训状态，并非选中的最佳 checkpoint。评测数据指纹：questions SHA-256 `f34d9c9909dea76700d361baddd63dd47b4494945097459b542d9fe840244811`；annotations SHA-256 `0564650e712b34c246e4ad142894692bf2e45dee8e9cc6ebb2cedbe85731c4bf`；predictions SHA-256 `febdf25cc960dd509e823af025d367020ddfcc328ab74dacb38c4a67ccf886b1`。
 ## Current Limitations / 当前限制
 
 The full answer-vocabulary coverage and question-type error profile for the released ViLT checkpoint are documented in [VQA validation diagnostics / VQA 验证集诊断](evaluation/v0.3.0-vilt-diagnostics.md). The analysis confirms that overall vocabulary coverage is high, while performance is notably weaker for numeric, name, time, and explanatory questions.
