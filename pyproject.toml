@@ -38,6 +38,13 @@ dependencies = [
 [project.optional-dependencies]
 dev = ["build>=1.2", "pytest>=8.0", "ruff>=0.8"]
 tracking = ["wandb>=0.17"]
+beit3 = [
+    "torchscale @ git+https://github.com/microsoft/torchscale.git@4d1e0e82e5adf86dd424f1463192635b73fc8efc",
+    "fairscale==0.4.0",
+    "timm==0.6.13",
+    "einops>=0.6",
+    "sentencepiece>=0.2.0",
+]
 
 [project.urls]
 Homepage = "https://github.com/dongtingshuo/multimodal-vqa"

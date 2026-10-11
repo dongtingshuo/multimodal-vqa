@@ -12,6 +12,7 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from .answers import AnswerVocab
+from .vqa_normalization import official_vqa_metrics
 
 
 def set_seed(seed: int) -> None:
@@ -71,17 +72,23 @@ def train_one_epoch(
     global_step_start: int = 0,
     scheduler: Any | None = None,
     is_main_process: bool = True,
+    start_batch: int = 0,
+    initial_totals: dict[str, float] | None = None,
+    checkpoint_callback: Callable[[dict[str, Any]], bool] | None = None,
 ) -> dict[str, float]:
     model.train()
     amp_enabled = _cuda_amp_enabled(device, use_amp)
     scaler = scaler or torch.amp.GradScaler("cuda", enabled=amp_enabled)
     accumulation_steps = max(int(gradient_accumulation_steps), 1)
-    total_loss = 0.0
-    total_correct = 0
-    total_vqa_score = 0.0
-    total_top5_vqa_score = 0.0
-    total_examples = 0
+    initial_totals = initial_totals or {}
+    total_loss = float(initial_totals.get("loss", 0.0))
+    total_correct = int(initial_totals.get("correct", 0))
+    total_vqa_score = float(initial_totals.get("vqa_score", 0.0))
+    total_top5_vqa_score = float(initial_totals.get("top5_vqa_score", 0.0))
+    total_examples = int(initial_totals.get("examples", 0))
     optimizer_steps = 0
+    last_batch = int(start_batch)
+    interrupted = False
 
     progress = tqdm(dataloader, desc="train", leave=False, disable=not is_main_process)
     optimizer.zero_grad(set_to_none=True)
@@ -89,6 +96,8 @@ def train_one_epoch(
     final_group_size = total_batches % accumulation_steps
     final_group_start = total_batches - final_group_size + 1
     for step, batch in enumerate(progress, start=1):
+        if step <= start_batch:
+            continue
         batch = move_batch_to_device(batch, device)
         should_step = step % accumulation_steps == 0 or step == total_batches
         no_sync = getattr(model, "no_sync", None)
@@ -122,6 +131,26 @@ def train_one_epoch(
         total_top5_vqa_score += batch_scores["top5_vqa_score"]
         total_examples += batch_size
         total_loss += loss.item() * batch_size
+        last_batch = step
+
+        if should_step and checkpoint_callback is not None:
+            interrupted = bool(
+                checkpoint_callback(
+                    {
+                        "epoch": int(epoch or 0),
+                        "batch_in_epoch": step,
+                        "global_step": global_step_start + optimizer_steps,
+                        "optimizer_steps_in_epoch": optimizer_steps,
+                        "local_totals": {
+                            "loss": total_loss,
+                            "correct": total_correct,
+                            "vqa_score": total_vqa_score,
+                            "top5_vqa_score": total_top5_vqa_score,
+                            "examples": total_examples,
+                        },
+                    }
+                )
+            )
 
         if step % max(log_every, 1) == 0:
             totals = torch.tensor(
@@ -158,6 +187,8 @@ def train_one_epoch(
                 )
             if step_callback is not None:
                 step_callback(running)
+        if interrupted:
+            break
 
     totals = torch.tensor(
         [total_loss, total_correct, total_vqa_score, total_top5_vqa_score, total_examples],
@@ -173,6 +204,8 @@ def train_one_epoch(
         "vqa_score": float(totals[2].item()) / total_count,
         "top5_vqa_score": float(totals[3].item()) / total_count,
         "optimizer_steps": float(optimizer_steps),
+        "batch_in_epoch": float(last_batch),
+        "interrupted": float(interrupted),
     }
 
 
@@ -184,7 +217,8 @@ def evaluate(
     use_amp: bool = False,
     answer_vocab: AnswerVocab | None = None,
     prediction_records: list[dict[str, Any]] | None = None,
-) -> dict[str, float]:
+    official_ground_truth: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
     if prediction_records is not None and answer_vocab is None:
         raise ValueError("answer_vocab is required when collecting predictions")
     model.eval()
@@ -218,13 +252,22 @@ def evaluate(
             for question_id, prediction in zip(batch["question_ids"], predictions.tolist()):
                 prediction_records.append({"question_id": int(question_id), "answer": answer_vocab.decode(prediction)})
 
-    return {
+    metrics: dict[str, Any] = {
         "loss": total_loss / max(total_examples, 1),
         "accuracy": total_correct / max(total_examples, 1),
         "vqa_score": total_vqa_score / max(total_examples, 1),
         "top5_vqa_score": total_top5_vqa_score / max(total_examples, 1),
         "evaluated_examples": float(total_examples),
     }
+    if official_ground_truth is not None:
+        if prediction_records is None:
+            raise ValueError("prediction_records are required for official VQA evaluation.")
+        official = official_vqa_metrics(prediction_records, official_ground_truth)
+        metrics["official_vqa_score"] = official["overall"]
+        metrics["official_answer_type_scores"] = official["per_answer_type"]
+        metrics["official_question_type_scores"] = official["per_question_type"]
+        metrics["official_evaluated_questions"] = official["evaluated_questions"]
+    return metrics
 
 
 def save_checkpoint(
@@ -245,7 +288,7 @@ def save_checkpoint(
     checkpoint_path = Path(path)
     checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
     payload = {
-        "format_version": 3,
+        "format_version": 4,
         "model_state": model.state_dict(),
         "optimizer_state": optimizer.state_dict(),
         "scheduler_state": scheduler.state_dict() if scheduler is not None else None,
@@ -254,6 +297,7 @@ def save_checkpoint(
         "metrics": metrics,
         "config": config,
         "idx_to_answer": answer_vocab.idx_to_answer,
+        "answer_vocab_normalization": answer_vocab.normalization,
         "metadata": metadata or {},
         "training_state": training_state or {},
         "rng_state": (

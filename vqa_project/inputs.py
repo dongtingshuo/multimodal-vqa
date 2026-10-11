@@ -1,12 +1,15 @@
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 import torch
 from PIL import Image
 from torchvision.transforms import functional as vision_functional
 
+from .beit3 import beit3_tokenizer, resolve_beit3_tokenizer
 from .data import ViltVQACollator, VQACollator, build_image_transform
 from .hf import load_tokenizer, load_vilt_processor
 
@@ -19,6 +22,7 @@ class InputPipeline:
     collator: Any
     image_mode: str
     model_name: str
+    tokenizer_path: Path | None = None
 
 
 class TinyViltProcessor:
@@ -57,7 +61,11 @@ class TinyViltProcessor:
         }
 
 
-def build_input_pipeline(model_cfg: dict[str, Any], data_cfg: dict[str, Any]) -> InputPipeline:
+def build_input_pipeline(
+    model_cfg: dict[str, Any],
+    data_cfg: dict[str, Any],
+    tokenizer_path: str | Path | None = None,
+) -> InputPipeline:
     model_name = str(model_cfg.get("name", "cross_attention"))
     max_question_length = int(data_cfg["max_question_length"])
     if model_name == "vilt":
@@ -75,6 +83,29 @@ def build_input_pipeline(model_cfg: dict[str, Any], data_cfg: dict[str, Any]) ->
             collator=ViltVQACollator(processor, max_question_length),
             image_mode="path",
             model_name=model_name,
+        )
+
+    if model_name == "beit3_base":
+        if model_cfg.get("mock_backbones", False):
+            tokenizer = load_tokenizer(str(model_cfg.get("text_model_name", "distilbert-base-uncased")))
+            tokenizer_path = None
+        else:
+            configured_path = tokenizer_path or model_cfg.get("tokenizer_path")
+            tokenizer_path = (
+                Path(configured_path)
+                if configured_path
+                else resolve_beit3_tokenizer(
+                    model_cfg.get("cache_dir"),
+                    local_files_only=os.environ.get("VQA_BEIT3_LOCAL_ONLY", "").lower() in {"1", "true", "yes"},
+                )
+            )
+            tokenizer = beit3_tokenizer(tokenizer_path)
+        return InputPipeline(
+            processor=tokenizer,
+            collator=VQACollator(tokenizer, max_question_length),
+            image_mode="tensor",
+            model_name=model_name,
+            tokenizer_path=tokenizer_path,
         )
 
     tokenizer = load_tokenizer(str(model_cfg["text_model_name"]))
@@ -113,7 +144,11 @@ def encode_single_input(
                 result[key] = encoded[key].to(device)
         return result
 
-    transform = build_image_transform(image_size, train=False)
+    transform = build_image_transform(
+        image_size,
+        train=False,
+        beit3_preprocessing=pipeline.model_name == "beit3_base",
+    )
     tokens = pipeline.processor(
         [question],
         padding=True,

@@ -428,6 +428,46 @@ The result is 0.34 percentage points below the recommended ViLT checkpoint's off
 
 The downloaded Version 34 result directory contained a zero-byte `best.pt`. The selected weights were recovered from the verified Version 33 epoch-4 checkpoint, which matches the Version 34 configuration and selected metrics; its SHA-256 is `947551915da46f6225f2574c217728b8125491608fa55a54aabd8625fd5561c5`. The V34 epoch-6 `latest.pt` is a continuation state and is not the selected best checkpoint. Evaluation provenance: questions SHA-256 `f34d9c9909dea76700d361baddd63dd47b4494945097459b542d9fe840244811`; annotations SHA-256 `0564650e712b34c246e4ad142894692bf2e45dee8e9cc6ebb2cedbe85731c4bf`; predictions SHA-256 `febdf25cc960dd509e823af025d367020ddfcc328ab74dacb38c4a67ccf886b1`.
 
+## BEiT-3 Improvement Program / BEiT-3 提分实验计划
+
+### Implementation status / 实现状态
+
+The next model-family experiment is an optional BEiT-3 Base VQA classifier. The implementation pins the TorchScale source commit, uses the generic pretrained Base checkpoint and official SentencePiece tokenizer, verifies both assets by expected size and SHA-256, and rejects incomplete backbone loading. The VQA head and input preprocessing follow the upstream VQAv2 implementation. The project-built answer vocabulary uses only normalized VQA v2 training answers; all official validation questions remain reserved for evaluation.
+
+下一阶段模型路线为可选的 BEiT-3 Base VQA 分类器。实现固定 TorchScale 源码 commit，使用通用预训练 Base 权重和官方 SentencePiece tokenizer，按预期文件大小与 SHA-256 校验资源，并拒绝不完整的骨干参数加载。VQA 分类头和图像预处理遵循上游 VQAv2 实现。项目答案词表仅由规范化后的 VQA v2 训练答案构建；全部官方验证问题只用于评测。
+
+At implementation time, a local CPU integration check loaded 100% of the expected pretrained backbone parameters (12/12 encoder layers), ran a finite 224 px forward pass, and verified that positional embeddings interpolate to the 480 px grid in FP32. The Kaggle runner and notebook now automatically benchmark candidate micro-batches, generate and reuse a global-batch-preserving runtime config, run the distributed checkpoint smoke, and save a data-sized time estimate. These new GPU gates have **not** been run: this local environment has no CUDA devices. No BEiT-3 training, validation score, Kaggle run, or performance improvement is claimed in this report.
+
+实现阶段的本地 CPU 集成检查已加载预期预训练骨干参数的 100%（12/12 层），完成有限值 224 px 前向，并验证位置编码可在 FP32 下插值到 480 px 网格。Kaggle runner 和 notebook 现会自动测量候选 micro-batch、生成并复用保持全局 batch 的运行配置、执行分布式 checkpoint smoke，并保存按数据规模计算的耗时估算。这些 GPU 门槛**尚未运行**：当前本机没有 CUDA 设备。本报告不声称 BEiT-3 已训练、已有验证分数、已在 Kaggle 运行或已取得性能提升。
+
+### Predeclared experiments / 预注册实验
+
+| Run | Data | Seed | Purpose | Config |
+| --- | --- | ---: | --- | --- |
+| A | VQA v2 train only | 42 | Primary architecture test | `configs/kaggle_beit3_a_t4x2.yaml` |
+| B | VQA v2 train plus COCO-train-mapped, screened Visual Genome QA | 42 | Isolate added-supervision effect | `configs/kaggle_beit3_b_vg_t4x2.yaml` |
+| C | Independently initialize the better A/B recipe | 123 | Replication check | `configs/kaggle_beit3_c_seed123_t4x2.yaml` |
+
+At most three complete experiments are authorized by the protocol. A and B use identical model, seed, optimizer, preprocessing, global batch, and stopping rule; only the screened VG data source differs. Each B epoch traverses all VQA train examples and deterministically samples without replacement up to 25% as many VG QA pairs. C changes only the seed from the selected A/B recipe. Visual Genome filtering excludes unmapped images, validation-image overlap, duplicate questions/answers, and answers outside the training-built vocabulary; the generated manifest records source hashes and retained/dropped counts. The VQA validation annotations are never used for training or vocabulary construction.
+
+本协议最多安排三次完整实验。A 与 B 的模型、seed、优化器、预处理、全局 batch 和停止规则相同，仅 VG 训练数据开关不同。B 每轮完整遍历 VQA 训练样本，并确定性地无放回采样不超过 VQA 数量 25% 的 VG 问答。C 只将优选 A/B 配方的 seed 改为 123。Visual Genome 筛选排除映射不明的图片、与验证图片重叠的内容、重复问答和训练词表外答案；生成清单记录源文件哈希及保留/剔除数量。VQA 验证标注不得用于训练或词表构建。
+
+### Compute and resume gates / 算力与续训门槛
+
+Before full training, the runner benchmarks per-GPU micro-batches 1/2/4/8 on the actual two-T4 session and generates `runtime_config.yaml` from the fastest option whose allocated and reserved peak memory are both below 88% of device capacity, preserving effective global batch 128. The separate two-GPU smoke must complete two forward/backward optimizer updates, prove parameter synchronization, and save/restore model, optimizer, AMP scaler, Python/torch/CUDA/data-generator RNG states, and the mid-epoch cursor. After strict full VQA/COCO data validation, a separate 128-example training smoke exercises the actual image reader, tokenizer, and gradient-accumulation path; only then does a report estimate model-only and buffered epoch time plus sessions required. This estimate uses short GPU-only throughput and is approximate. Both smokes and the user-visible estimate are required before full training.
+
+全量训练前，runner 会在实际双 T4 会话测量每卡 micro-batch 1/2/4/8，并从已分配和预留显存峰值均低于设备容量 88% 的候选中选择最快者，生成保持有效全局 batch 128 的 `runtime_config.yaml`。独立双卡 smoke 必须完成两次前向/反向 optimizer update、证明参数同步，并保存/恢复模型、优化器、AMP scaler、Python/torch/CUDA/数据生成器随机状态与 epoch 内游标。完整 VQA/COCO 数据严格校验后，再运行独立的 128 样本训练 smoke，覆盖真实图片读取、tokenizer 和梯度累积；通过后报告才估算仅模型计算耗时、加缓冲的 epoch 时间和预计会话数。估算基于短 GPU 测速，不是保证。两个 smoke 和用户可见估算都是启动全量训练的门槛。
+
+Each run uses up to 10 epochs, full-backbone fine-tuning, AdamW with backbone LR `3e-5`, head LR `6e-4`, weight decay `0.01`, betas `(0.9, 0.98)`, gradient clipping `1.0`, a 10% warmup followed by cosine decay, mixed precision, and activation checkpointing. Checkpoints are written every 500 optimizer updates and at epoch boundaries; after epoch 4, three consecutive epochs without at least `0.1` official-score improvement stop the run. Runs are independent and resumable only when the saved model/data/config fingerprint matches.
+
+每次运行最多 10 epoch，全骨干微调；AdamW 的骨干 LR 为 `3e-5`、分类头 LR 为 `6e-4`、weight decay 为 `0.01`、betas 为 `(0.9, 0.98)`，梯度裁剪为 `1.0`；前 10% warmup 后采用 cosine decay，启用混合精度和 activation checkpoint。每 500 次 optimizer update 及 epoch 边界写入 checkpoint；从 epoch 4 起，若连续三轮官方分数提升均不足 `0.1`，则停止。实验互相独立，只有模型/数据/配置指纹一致时才允许续训。
+
+### Acceptance and promotion / 验收与晋升
+
+The aspirational target is at least `75.00` official VQA validation overall for the selected A/B run and at least `74.50` for the independent C replication. These are acceptance targets, not promised outcomes. Every selected model must export predictions for exactly all 214,354 validation question IDs and pass the upstream VQA Evaluation Toolkit twice with identical results. Report overall and answer-type metrics, source/config/data fingerprints, and all artifacts. If thresholds are missed, record the measured result and likely failure evidence; do not substitute internal accuracy, partial validation, ensemble results, or a changed split. The current `68.42` ViLT release remains recommended until all gates pass.
+
+目标为优选 A/B 官方 VQA 验证 overall 至少 `75.00`，并要求独立 C 复现至少 `74.50`。这属于验收目标，不是结果承诺。每个候选模型必须导出 question ID 与官方验证集 214,354 条完全一致的预测，并通过上游 VQA Evaluation Toolkit 两次且结果相同。报告 overall、答案类型指标、数据/配置/来源指纹和全部产物。未达标时如实记录测量结果和失败证据，不得以内部准确率、部分验证、集成结果或更换数据划分代替。所有门槛通过前，当前 `68.42` 的 ViLT Release 仍为推荐版本。
+
 下载的 Version 34 结果目录中 `best.pt` 为 0 字节。最终选用已验证的 Version 33 epoch 4 checkpoint 恢复权重，其配置和 Version 34 选中指标一致；SHA-256 为 `947551915da46f6225f2574c217728b8125491608fa55a54aabd8625fd5561c5`。V34 epoch 6 的 `latest.pt` 是续训状态，并非选中的最佳 checkpoint。评测数据指纹：questions SHA-256 `f34d9c9909dea76700d361baddd63dd47b4494945097459b542d9fe840244811`；annotations SHA-256 `0564650e712b34c246e4ad142894692bf2e45dee8e9cc6ebb2cedbe85731c4bf`；predictions SHA-256 `febdf25cc960dd509e823af025d367020ddfcc328ab74dacb38c4a67ccf886b1`。
 ## Current Limitations / 当前限制
 

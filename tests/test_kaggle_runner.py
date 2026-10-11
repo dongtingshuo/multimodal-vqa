@@ -80,6 +80,7 @@ def test_missing_coco_images_use_the_official_s3_bucket(tmp_path: Path, monkeypa
 
 def test_dependency_install_reuses_usable_preinstalled_torch(monkeypatch) -> None:
     commands = []
+    monkeypatch.setattr(run_kaggle_finetune, "CONFIG_PATH", "configs/kaggle_vilt_last6_t4x2.yaml")
     monkeypatch.setattr(run_kaggle_finetune, "preinstalled_torch_is_usable", lambda: True)
     monkeypatch.setattr(run_kaggle_finetune, "run", lambda command, cwd=None: commands.append(command))
 
@@ -94,6 +95,7 @@ def test_dependency_install_reuses_usable_preinstalled_torch(monkeypatch) -> Non
 def test_dependency_install_falls_back_to_pinned_torch(tmp_path: Path, monkeypatch) -> None:
     commands = []
     runtime_dir = tmp_path / "pytorch-runtime"
+    monkeypatch.setattr(run_kaggle_finetune, "CONFIG_PATH", "configs/kaggle_vilt_last6_t4x2.yaml")
     monkeypatch.setattr(run_kaggle_finetune, "PYTORCH_RUNTIME_DIR", runtime_dir)
     monkeypatch.setattr(run_kaggle_finetune, "preinstalled_torch_is_usable", lambda: False)
     monkeypatch.setattr(run_kaggle_finetune, "torch_runtime_is_usable", lambda: True)
@@ -108,6 +110,93 @@ def test_dependency_install_falls_back_to_pinned_torch(tmp_path: Path, monkeypat
     assert f"torchvision=={run_kaggle_finetune.TORCHVISION_VERSION}" in commands[0]
     assert run_kaggle_finetune.TRANSFORMERS_SPEC in commands[1]
     assert "wandb>=0.17" not in commands[1]
+
+
+def test_beit3_dependency_install_uses_torchscale_compatible_versions(monkeypatch) -> None:
+    commands = []
+    monkeypatch.setattr(run_kaggle_finetune, "CONFIG_PATH", "configs/kaggle_beit3_a_t4x2.yaml")
+    monkeypatch.setattr(run_kaggle_finetune, "preinstalled_torch_is_usable", lambda: True)
+    monkeypatch.setattr(run_kaggle_finetune, "run", lambda command, cwd=None: commands.append(command))
+
+    run_kaggle_finetune.install_training_dependencies()
+
+    beit3_install = commands[-1]
+    assert "fairscale==0.4.0" in beit3_install
+    assert "timm==0.6.13" in beit3_install
+    assert "einops>=0.6" in beit3_install
+    assert not any(str(part) == "fairscale>=0.4.13" for part in beit3_install)
+
+
+def test_kaggle_runner_defaults_to_beit3_a() -> None:
+    assert run_kaggle_finetune.CONFIG_PATH == "configs/kaggle_beit3_a_t4x2.yaml"
+    assert run_kaggle_finetune.DEFAULT_RUN_NAME == "beit3-vqa-a-seed42-t4x2"
+
+
+def test_beit3_preflight_benchmarks_generates_config_and_smokes_then_reuses(tmp_path: Path, monkeypatch) -> None:
+    from scripts.prepare_beit3_runtime_config import prepare_runtime_config
+
+    repo_root = Path(run_kaggle_finetune.__file__).resolve().parents[1]
+    checkpoint_dir = tmp_path / "run"
+    checkpoint_dir.mkdir()
+    monkeypatch.setattr(run_kaggle_finetune, "REPO_ROOT", repo_root)
+    monkeypatch.setattr(run_kaggle_finetune, "CHECKPOINT_DIR", checkpoint_dir)
+    monkeypatch.setattr(run_kaggle_finetune, "CONFIG_PATH", "configs/kaggle_beit3_a_t4x2.yaml")
+    commands = []
+
+    def fake_run(command, cwd=None):
+        command = [str(part) for part in command]
+        commands.append(command)
+        if any("benchmark_beit3_batch.py" in part for part in command):
+            report_path = Path(command[command.index("--output") + 1])
+            workers = [
+                {
+                    "status": "ok",
+                    "samples_per_second": 2.0,
+                    "peak_allocated_gib": 10.0,
+                    "peak_reserved_gib": 11.0,
+                    "device_total_gib": 16.0,
+                }
+                for _ in range(2)
+            ]
+            report_path.write_text(
+                json.dumps(
+                    {
+                        "world_size": 2,
+                        "image_size": 480,
+                        "target_global_batch_size": 128,
+                        "selected_batch_size_per_gpu": 2,
+                        "results": [{"batch_size_per_gpu": 2, "status": "ok", "per_gpu": workers}],
+                    }
+                ),
+                encoding="utf-8",
+            )
+        elif any("prepare_beit3_runtime_config.py" in part for part in command):
+            prepare_runtime_config(
+                repo_root / command[command.index("--config") + 1],
+                command[command.index("--benchmark") + 1],
+                command[command.index("--output") + 1],
+                expected_world_size=int(command[command.index("--world-size") + 1]),
+            )
+
+    monkeypatch.setattr(run_kaggle_finetune, "run", fake_run)
+    launcher = ["python", "-u", "-m", "torch.distributed.run", "--standalone", "--nproc_per_node=2", "train.py"]
+
+    config_path = run_kaggle_finetune.prepare_beit3_runtime(launcher)
+
+    assert Path(config_path).is_file()
+    assert [next((part for part in command if part.endswith(".py")), "") for command in commands] == [
+        "scripts/benchmark_beit3_batch.py",
+        "scripts/prepare_beit3_runtime_config.py",
+        "scripts/smoke_beit3_distributed.py",
+    ]
+    assert "--nproc_per_node=2" in commands[0]
+    assert "--expected-gpus" in commands[2]
+    commands.clear()
+
+    run_kaggle_finetune.prepare_beit3_runtime(launcher)
+
+    assert len(commands) == 1
+    assert "scripts/smoke_beit3_distributed.py" in commands[0]
 
 
 def test_kaggle_runner_has_no_wandb_secret_path() -> None:

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+from pathlib import Path
 
 from vqa_project.answers import AnswerVocab
 from vqa_project.config import apply_runtime_overrides, load_config, resolve_checkpoint_config, resolve_device
@@ -31,10 +32,16 @@ def main() -> None:
     model_cfg = config["model"]
 
     answer_vocab = AnswerVocab(
-        checkpoint.get("idx_to_answer") or AnswerVocab.load(data_cfg["answer_vocab_path"]).idx_to_answer
+        checkpoint.get("idx_to_answer") or AnswerVocab.load(data_cfg["answer_vocab_path"]).idx_to_answer,
+        normalization=str(checkpoint.get("answer_vocab_normalization", "legacy")),
     )
-    input_pipeline = build_input_pipeline(model_cfg, data_cfg)
-    model = build_model(model_cfg, answer_vocab_size=len(answer_vocab)).to(device)
+    checkpoint_tokenizer = Path(args.checkpoint).resolve().parent / "beit3.spm"
+    input_pipeline = build_input_pipeline(
+        model_cfg,
+        data_cfg,
+        tokenizer_path=checkpoint_tokenizer if checkpoint_tokenizer.is_file() else None,
+    )
+    model = build_model(model_cfg, answer_vocab_size=len(answer_vocab), load_pretrained=False).to(device)
     model.load_state_dict(checkpoint["model_state"])
 
     results = predict(

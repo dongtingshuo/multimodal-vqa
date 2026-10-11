@@ -28,7 +28,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--server-port", type=int, default=8877)
     parser.add_argument("--server-name", default="127.0.0.1")
     parser.add_argument("--inbrowser", action="store_true")
-    parser.add_argument("--offline", action="store_true", help="Only use locally cached Hugging Face model files.")
+    parser.add_argument("--offline", action="store_true", help="Only use locally cached model and tokenizer files.")
     parser.add_argument("--share", action="store_true")
     parser.add_argument("--device", choices=["auto", "cpu", "cuda", "mps"])
     return parser.parse_args()
@@ -66,10 +66,16 @@ def build_predictor(config_path: str, checkpoint_path: str, device_override: str
         data_cfg = config["data"]
         model_cfg = config["model"]
         answer_vocab = AnswerVocab(
-            checkpoint.get("idx_to_answer") or AnswerVocab.load(data_cfg["answer_vocab_path"]).idx_to_answer
+            checkpoint.get("idx_to_answer") or AnswerVocab.load(data_cfg["answer_vocab_path"]).idx_to_answer,
+            normalization=str(checkpoint.get("answer_vocab_normalization", "legacy")),
         )
-        input_pipeline = build_input_pipeline(model_cfg, data_cfg)
-        model = build_model(model_cfg, answer_vocab_size=len(answer_vocab)).to(device)
+        checkpoint_tokenizer = checkpoint_file.resolve().parent / "beit3.spm"
+        input_pipeline = build_input_pipeline(
+            model_cfg,
+            data_cfg,
+            tokenizer_path=checkpoint_tokenizer if checkpoint_tokenizer.is_file() else None,
+        )
+        model = build_model(model_cfg, answer_vocab_size=len(answer_vocab), load_pretrained=False).to(device)
         model.load_state_dict(checkpoint["model_state"])
         metadata = checkpoint.get("metadata") or {}
         metrics = checkpoint.get("metrics") or {}
@@ -118,6 +124,7 @@ def main() -> None:
     args = parse_args()
     if args.offline:
         os.environ["VQA_HF_LOCAL_ONLY"] = "1"
+        os.environ["VQA_BEIT3_LOCAL_ONLY"] = "1"
     predictor, status = build_predictor(args.config, args.checkpoint, args.device)
     server_port = find_available_port(args.server_port, args.server_name)
     if server_port != args.server_port:

@@ -133,6 +133,36 @@ leaderboard 或跨项目 SOTA 声明。
 | Strong cross-attention ablation | 0.4967 | 0.5955 | not evaluated | Not promoted |
 | Legacy checkpoint (`v0.1.0`) | 0.4775 | not recorded | not evaluated | Archived |
 
+## Experimental Candidate: BEiT-3 Base
+
+This section describes an implemented but not yet trained candidate. It has no validation result, release checkpoint, or promotion claim. The ViLT `v0.3.0` checkpoint remains the recommended model.
+
+本节说明已接入工程、但尚未完成训练的候选模型。当前没有验证指标、发布权重或晋升结论；ViLT `v0.3.0` 仍是推荐模型。
+
+| Property | Value |
+| --- | --- |
+| Model ID | `beit3_base` |
+| Architecture | BEiT-3 Base, 12 encoder layers, hidden size 768, VQA pooling/classification head |
+| Pretraining | Generic BEiT-3 Base pretraining; no VQA-finetuned or in-domain checkpoint |
+| Image input | 480 x 480, official BEiT-3 VQA resize/bicubic and normalization path |
+| Text tokenizer | Official `beit3.spm` SentencePiece model |
+| Answer space | Top-5000 built from VQA v2 training annotations only, VQA-v2 answer normalization |
+| Upstream implementation license | MIT, per the [Microsoft UniLM repository](https://github.com/microsoft/unilm) |
+| TorchScale source | [`4d1e0e82e5adf86dd424f1463192635b73fc8efc`](https://github.com/microsoft/torchscale/tree/4d1e0e82e5adf86dd424f1463192635b73fc8efc) |
+| Pretrained weights | [`beit3_base_patch16_224.pth`](https://github.com/addf400/files/releases/download/beit3/beit3_base_patch16_224.pth), 554,351,015 bytes |
+| Weights SHA-256 | `12ebc3d487f418d4f0f000d09719edfe7dcc89079da427f5580a7fb86ee3943a` |
+| Tokenizer SHA-256 | `6f5e2fefcf793761a76a6bfb8ad35489f9c203b25557673284b6d032f41043f4` |
+| Training plan | A: VQA v2 only; B: screened Visual Genome QA; C: independent seed-123 replication |
+| Status | Implemented; real pretrained load tested locally; automatic T4 micro-batch config and runtime estimate added; actual dual-T4 smoke, full training, and official evaluation pending |
+
+Upstream VQAv2 preprocessing, answer normalization, and the classification-head layout are adapted from Microsoft's [BEiT-3 VQAv2 guide](https://github.com/microsoft/unilm/blob/master/beit3/get_started/get_started_for_vqav2.md) and [official implementation](https://github.com/microsoft/unilm/tree/master/beit3). The base checkpoint is downloaded from the upstream-linked release location and rejected if its expected size or SHA-256 does not match. Kaggle preflight benchmarks per-GPU batches 1/2/4/8, writes a runtime config preserving global batch 128, performs a real distributed checkpoint round-trip, and records a cautious throughput-based epoch/session estimate. The local integration test loaded all 12 encoder layers and verified the 480 px positional-embedding interpolation; these are implementation checks, not training results.
+
+上游 VQAv2 图像预处理、答案规范化和分类头结构参考 Microsoft 的 [BEiT-3 VQAv2 指南](https://github.com/microsoft/unilm/blob/master/beit3/get_started/get_started_for_vqav2.md)及[官方实现](https://github.com/microsoft/unilm/tree/master/beit3)。Base 权重从上游指向的发布地址下载，文件大小或 SHA-256 不匹配时会拒绝加载。Kaggle 预检会测量每卡 batch 1/2/4/8、生成保持全局 batch 128 的运行配置、执行真实分布式 checkpoint 往返验证，并按吞吐记录审慎的 epoch/会话估算。本地集成测试已加载全部 12 层 encoder，并检查 480 px 位置编码插值；这些都只是实现检查，不代表训练结果。
+
+The predeclared acceptance metric is official VQA validation overall score on all 214,354 questions. Internal metrics and partial exports cannot substitute for this gate. A candidate is promoted only after complete prediction-ID matching, repeated official evaluation, and an independent seed replication; until then, none of these configurations replaces the existing release.
+
+预先声明的验收指标为全部 214,354 个问题上的官方 VQA validation overall。内部指标和部分预测不能替代此门槛。候选只有在预测 ID 完整匹配、官方评测可重复，并完成独立 seed 复现后才可晋升；此前任何 BEiT-3 配置都不会替换现有发布版本。
+
 ## Runtime Requirements / 运行要求
 
 The release stores trained model parameters and checkpoint-owned preprocessing configuration.

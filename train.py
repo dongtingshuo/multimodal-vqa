@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import argparse
 import datetime
+import json
 import math
 import os
+import shutil
 import time
 from pathlib import Path
 
@@ -13,8 +15,9 @@ from torch.nn.parallel import DistributedDataParallel
 from torch.utils.data import DataLoader, DistributedSampler
 
 from vqa_project.answers import AnswerVocab, build_answer_vocab
+from vqa_project.beit3 import resolve_beit3_assets, resolve_beit3_tokenizer
 from vqa_project.config import apply_runtime_overrides, load_config, resolve_device
-from vqa_project.data import VQADataset, default_annotation_path
+from vqa_project.data import VQADataset, VQAWithVisualGenomeSampler, default_annotation_path
 from vqa_project.engine import (
     capture_rng_state,
     evaluate,
@@ -39,6 +42,7 @@ from vqa_project.tracking import (
 from vqa_project.training import (
     build_optimizer,
     build_scheduler,
+    compute_vqa_data_fingerprint,
     configure_finetune_stage,
     count_parameters,
     stage_for_epoch,
@@ -70,21 +74,28 @@ def parse_args() -> argparse.Namespace:
 
 def load_or_build_answer_vocab(data_cfg: dict, checkpoint: dict | None = None) -> AnswerVocab:
     if checkpoint and checkpoint.get("idx_to_answer"):
-        answer_vocab = AnswerVocab(list(checkpoint["idx_to_answer"]))
+        answer_vocab = AnswerVocab(
+            list(checkpoint["idx_to_answer"]),
+            normalization=str(checkpoint.get("answer_vocab_normalization", "legacy")),
+        )
         if len(answer_vocab) != int(data_cfg["answer_vocab_size"]):
             raise ValueError("Resume checkpoint answer vocabulary does not match the configured vocabulary size.")
         return answer_vocab
 
     vocab_path = Path(data_cfg["answer_vocab_path"])
     expected_size = int(data_cfg["answer_vocab_size"])
+    normalization = str(data_cfg.get("answer_normalization", "legacy"))
     if vocab_path.exists():
         answer_vocab = AnswerVocab.load(vocab_path)
-        if len(answer_vocab) == expected_size:
+        if len(answer_vocab) == expected_size and answer_vocab.normalization == normalization:
             return answer_vocab
-        print(f"answer vocab size changed from {len(answer_vocab)} to {expected_size}; rebuilding {vocab_path}")
+        print(
+            f"answer vocab settings changed (size={len(answer_vocab)}, normalization={answer_vocab.normalization}); "
+            f"rebuilding {vocab_path}"
+        )
 
     train_annotations = default_annotation_path(data_cfg["root"], data_cfg["train_split"])
-    answer_vocab = build_answer_vocab(train_annotations, expected_size)
+    answer_vocab = build_answer_vocab(train_annotations, expected_size, normalization=normalization)
     answer_vocab.save(vocab_path)
     return answer_vocab
 
@@ -226,6 +237,13 @@ def run_training(
         distributed.barrier()
     if not is_main_process:
         answer_vocab = load_or_build_answer_vocab(data_cfg, resume_checkpoint)
+    if model_cfg.get("name") == "beit3_base" and world_size > 1:
+        if is_main_process:
+            if resume_checkpoint is None:
+                resolve_beit3_assets(model_cfg.get("cache_dir"))
+            else:
+                resolve_beit3_tokenizer(model_cfg.get("cache_dir"))
+        distributed.barrier()
     input_pipeline = build_input_pipeline(model_cfg, data_cfg)
 
     train_dataset = VQADataset(
@@ -237,6 +255,8 @@ def run_training(
         train=True,
         augmentation=data_cfg.get("augmentation"),
         image_mode=input_pipeline.image_mode,
+        extra_qa_path=data_cfg.get("visual_genome_qa_path"),
+        beit3_preprocessing=model_cfg.get("name") == "beit3_base",
     )
     val_dataset = VQADataset(
         root=data_cfg["root"],
@@ -247,9 +267,26 @@ def run_training(
         train=False,
         augmentation=data_cfg.get("augmentation"),
         image_mode=input_pipeline.image_mode,
+        filter_without_known_answer=train_cfg.get("selection_metric") != "official_vqa_score",
+        beit3_preprocessing=model_cfg.get("name") == "beit3_base",
     )
+    data_fingerprint = compute_vqa_data_fingerprint(
+        data_cfg["root"],
+        data_cfg["train_split"],
+        data_cfg["val_split"],
+        answer_vocab.idx_to_answer,
+        answer_vocab.normalization,
+        data_cfg.get("visual_genome_qa_path"),
+    )
+    if resume_checkpoint is not None:
+        stored_fingerprint = (resume_checkpoint.get("training_state") or {}).get("data_fingerprint")
+        if stored_fingerprint and stored_fingerprint != data_fingerprint:
+            raise ValueError(
+                "Resume checkpoint data fingerprint does not match the current VQA/VG data or answer vocabulary."
+            )
     if is_main_process:
         print(f"answer_vocab={len(answer_vocab)} train_examples={len(train_dataset)} val_examples={len(val_dataset)}")
+        print(f"data_fingerprint={data_fingerprint}")
 
     configured_batch_size = int(train_cfg["batch_size"])
     configured_accumulation = int(train_cfg.get("gradient_accumulation_steps", 1))
@@ -272,18 +309,34 @@ def run_training(
             )
 
     data_generator = torch.Generator().manual_seed(int(config["seed"]) + rank)
-    train_sampler = (
-        DistributedSampler(
+    if train_dataset.visual_genome_example_count:
+        train_sampler = VQAWithVisualGenomeSampler(
             train_dataset,
             num_replicas=world_size,
             rank=rank,
-            shuffle=True,
             seed=int(config["seed"]),
-            drop_last=False,
+            visual_genome_ratio=float(data_cfg.get("visual_genome_sample_ratio", 0.25)),
         )
-        if world_size > 1
-        else None
-    )
+    else:
+        train_sampler = (
+            DistributedSampler(
+                train_dataset,
+                num_replicas=world_size,
+                rank=rank,
+                shuffle=True,
+                seed=int(config["seed"]),
+                drop_last=False,
+            )
+            if world_size > 1
+            else None
+        )
+    if is_main_process and train_dataset.visual_genome_example_count:
+        print(
+            f"epoch_data_mix=vqa:{train_dataset.vqa_example_count} "
+            f"visual_genome:{train_sampler.visual_genome_sample_count}/"
+            f"{train_dataset.visual_genome_example_count} candidates "
+            f"samples_per_epoch={len(train_sampler) * world_size}"
+        )
     train_loader = build_dataloader(
         train_dataset,
         batch_size=batch_size,
@@ -305,7 +358,11 @@ def run_training(
         collator=input_pipeline.collator,
     )
 
-    model = build_model(model_cfg, answer_vocab_size=len(answer_vocab)).to(device)
+    model = build_model(
+        model_cfg,
+        answer_vocab_size=len(answer_vocab),
+        load_pretrained=resume_checkpoint is None,
+    ).to(device)
     optimizer = build_optimizer(model, train_cfg)
     total_epochs = int(train_cfg["epochs"])
     optimizer_steps_per_epoch = math.ceil(
@@ -332,6 +389,14 @@ def run_training(
     run_metadata = collect_run_metadata(args.config, device) if is_main_process else {}
     if is_main_process:
         run_metadata["selection_metric"] = train_cfg.get("selection_metric", "vqa_score")
+        run_metadata["data_fingerprint"] = data_fingerprint
+        if train_dataset.visual_genome_example_count:
+            run_metadata["training_data_mix"] = {
+                "vqa_examples_per_epoch": train_dataset.vqa_example_count,
+                "visual_genome_candidate_examples": train_dataset.visual_genome_example_count,
+                "visual_genome_sample_ratio": train_sampler.visual_genome_ratio,
+                "visual_genome_sampled_per_epoch": train_sampler.visual_genome_sample_count,
+            }
         run_metadata["effective_config"] = config
         run_metadata["run_dir"] = str(artifact_dir)
         run_metadata["distributed"] = {
@@ -348,6 +413,10 @@ def run_training(
     global_step = 0
     epochs_without_improvement = 0
     start_epoch = 1
+    resume_epoch: int | None = None
+    resume_batch = 0
+    resume_local_totals: dict[str, float] = {}
+    restored_training_state: dict = {}
     if resume_checkpoint is not None:
         restored = restore_training_checkpoint(
             resume_checkpoint,
@@ -359,24 +428,42 @@ def run_training(
             rank=rank,
             device=device,
         )
-        start_epoch = int(resume_checkpoint["epoch"]) + 1
+        restored_training_state = dict(restored)
         history = list(restored.get("history") or [])
         best_metric = float(restored.get("best_metric", best_metric))
         global_step = int(restored.get("global_step", 0))
         epochs_without_improvement = int(restored.get("epochs_without_improvement", 0))
+        epoch_complete = bool(restored.get("epoch_complete", True))
+        start_epoch = int(resume_checkpoint["epoch"]) + (1 if epoch_complete else 0)
+        if not epoch_complete:
+            resume_epoch = int(resume_checkpoint["epoch"])
+            resume_batch = int(restored.get("batch_in_epoch", 0))
+            per_rank_totals = restored.get("per_rank_epoch_totals") or []
+            stored_world_size = int(restored.get("world_size", len(per_rank_totals) or 1))
+            if stored_world_size != world_size:
+                raise ValueError(
+                    f"Cannot resume an in-epoch checkpoint with world_size={stored_world_size} using world_size={world_size}."
+                )
+            if per_rank_totals:
+                resume_local_totals = dict(per_rank_totals[rank])
         if is_main_process:
             run_metadata["resumed_from"] = str(Path(args.resume).resolve())
             run_metadata["resumed_epoch"] = int(resume_checkpoint["epoch"])
 
     if world_size > 1:
+        permanently_frozen = set(getattr(model, "permanently_frozen_parameter_names", set()))
         needs_unused_parameter_tracking = (
             train_cfg.get("staged_finetuning", False)
-            or train_cfg.get("fixed_finetune_stage") is not None
+            or train_cfg.get("fixed_finetune_stage") in {"frozen", "partial"}
             or model_cfg.get("freeze_backbones", False)
-            or any(not parameter.requires_grad for parameter in model.parameters())
+            or any(
+                not parameter.requires_grad
+                for name, parameter in model.named_parameters()
+                if name not in permanently_frozen
+            )
         )
-        for parameter in model.parameters():
-            parameter.requires_grad_(True)
+        for name, parameter in model.named_parameters():
+            parameter.requires_grad_(name not in permanently_frozen)
         training_model = DistributedDataParallel(
             model,
             device_ids=[local_rank],
@@ -391,6 +478,10 @@ def run_training(
 
     if is_main_process:
         artifact_dir.mkdir(parents=True, exist_ok=True)
+        if input_pipeline.tokenizer_path is not None and input_pipeline.tokenizer_path.is_file():
+            tokenizer_copy = artifact_dir / input_pipeline.tokenizer_path.name
+            if input_pipeline.tokenizer_path.resolve() != tokenizer_copy.resolve():
+                shutil.copy2(input_pipeline.tokenizer_path, tokenizer_copy)
         write_json(config_snapshot_path, config)
     resume_wandb_id = None
     if resume_checkpoint is not None:
@@ -413,10 +504,18 @@ def run_training(
     if is_main_process:
         write_json(metadata_path, run_metadata)
     selection_metric = str(train_cfg.get("selection_metric", "vqa_score"))
+    checkpoint_interval = int(runtime_cfg.get("checkpoint_every_updates", 0))
+    stop_at_unix = float(os.environ.get("VQA_STOP_AT_UNIX", runtime_cfg.get("stop_at_unix", 0.0)) or 0.0)
     training_started = time.perf_counter()
-    elapsed_offset = float(history[-1].get("total_seconds", 0.0)) if history else 0.0
+    elapsed_offset = float(
+        restored_training_state.get("elapsed_seconds", history[-1].get("total_seconds", 0.0) if history else 0.0)
+    )
 
     try:
+        if is_main_process:
+            (artifact_dir / "training_paused.json").unlink(missing_ok=True)
+        if world_size > 1:
+            distributed.barrier()
         for epoch in range(start_epoch, total_epochs + 1):
             epoch_started = time.perf_counter()
             stage = stage_for_epoch(model_cfg, train_cfg, epoch)
@@ -430,6 +529,76 @@ def run_training(
 
             if train_sampler is not None:
                 train_sampler.set_epoch(epoch)
+
+            prediction_records: list[dict] | None = [] if selection_metric == "official_vqa_score" else None
+
+            def save_mid_epoch_checkpoint(event: dict) -> bool:
+                decision = None
+                if is_main_process:
+                    due_to_interval = checkpoint_interval > 0 and event["global_step"] % checkpoint_interval == 0
+                    due_to_deadline = stop_at_unix > 0 and time.time() >= stop_at_unix
+                    decision = {
+                        "save": due_to_interval or due_to_deadline,
+                        "deadline": due_to_deadline,
+                    }
+                decision = _broadcast_object(decision, world_size)
+                due_to_deadline = bool(decision["deadline"])
+                if not decision["save"]:
+                    return False
+
+                rank_totals: list[dict | None] = [event["local_totals"]]
+                if world_size > 1:
+                    rank_totals = [None] * world_size
+                    distributed.all_gather_object(rank_totals, event["local_totals"])
+                distributed_rng_states = _gather_rng_states(data_generator, world_size)
+                mid_state = {
+                    "history": history,
+                    "best_metric": best_metric,
+                    "global_step": int(event["global_step"]),
+                    "epochs_without_improvement": epochs_without_improvement,
+                    "finetune_stage": stage,
+                    "epoch_complete": False,
+                    "batch_in_epoch": int(event["batch_in_epoch"]),
+                    "per_rank_epoch_totals": rank_totals,
+                    "world_size": world_size,
+                    "data_fingerprint": data_fingerprint,
+                    "interrupted": due_to_deadline,
+                    "elapsed_seconds": elapsed_offset + time.perf_counter() - training_started,
+                }
+                if is_main_process:
+                    save_checkpoint(
+                        latest_path,
+                        model=model,
+                        optimizer=optimizer,
+                        epoch=epoch,
+                        metrics={"partial_epoch": 1.0},
+                        config=config,
+                        answer_vocab=answer_vocab,
+                        metadata=run_metadata,
+                        scheduler=scheduler,
+                        scaler=scaler,
+                        training_state=mid_state,
+                        data_generator=data_generator,
+                        distributed_rng_states=distributed_rng_states,
+                    )
+                    if due_to_deadline:
+                        write_json(
+                            artifact_dir / "training_paused.json",
+                            {
+                                "epoch": epoch,
+                                "batch_in_epoch": int(event["batch_in_epoch"]),
+                                "global_step": int(event["global_step"]),
+                                "latest_checkpoint": str(latest_path),
+                                "reason": "session_time_budget",
+                            },
+                        )
+                    print(
+                        f"saved mid-epoch checkpoint: epoch={epoch} batch={event['batch_in_epoch']} "
+                        f"global_step={event['global_step']} interrupted={due_to_deadline}"
+                    )
+                if world_size > 1:
+                    distributed.barrier()
+                return due_to_deadline
 
             train_metrics = train_one_epoch(
                 training_model,
@@ -451,10 +620,35 @@ def run_training(
                 global_step_start=global_step,
                 scheduler=scheduler,
                 is_main_process=is_main_process,
+                start_batch=resume_batch if resume_epoch == epoch else 0,
+                initial_totals=resume_local_totals if resume_epoch == epoch else None,
+                checkpoint_callback=(
+                    save_mid_epoch_checkpoint
+                    if checkpoint_interval > 0 or stop_at_unix > 0
+                    else None
+                ),
             )
             global_step += int(train_metrics["optimizer_steps"])
+            resume_batch = 0
+            resume_local_totals = {}
+            resume_epoch = None
+            if train_metrics["interrupted"]:
+                if is_main_process:
+                    run_metadata["status"] = "paused"
+                    run_metadata["last_checkpoint"] = str(latest_path)
+                    write_json(metadata_path, run_metadata)
+                    print("session budget reached; training paused at a resumable optimizer boundary")
+                break
             val_metrics = (
-                evaluate(model, val_loader, device, use_amp=train_cfg.get("use_amp", False))
+                evaluate(
+                    model,
+                    val_loader,
+                    device,
+                    use_amp=train_cfg.get("use_amp", False),
+                    answer_vocab=answer_vocab if prediction_records is not None else None,
+                    prediction_records=prediction_records,
+                    official_ground_truth=val_dataset.examples if prediction_records is not None else None,
+                )
                 if is_main_process
                 else None
             )
@@ -491,11 +685,14 @@ def run_training(
                 "val_accuracy": val_metrics["accuracy"],
                 "val_vqa_score": val_metrics["vqa_score"],
                 "val_top5_vqa_score": val_metrics["top5_vqa_score"],
+                "val_official_vqa_score": val_metrics.get("official_vqa_score"),
                 "learning_rate": current_lr,
                 "epoch_seconds": time.perf_counter() - epoch_started,
                 "total_seconds": total_seconds,
                 "best_checkpoint": is_best,
             }
+            for answer_type, score in val_metrics.get("official_answer_type_scores", {}).items():
+                epoch_row[f"val_official_answer_type/{answer_type}"] = score
             history.append(epoch_row)
             training_state = {
                 "history": history,
@@ -503,6 +700,10 @@ def run_training(
                 "global_step": global_step,
                 "epochs_without_improvement": epochs_without_improvement,
                 "finetune_stage": stage,
+                "epoch_complete": True,
+                "world_size": world_size,
+                "data_fingerprint": data_fingerprint,
+                "elapsed_seconds": total_seconds,
             }
             distributed_rng_states = _gather_rng_states(data_generator, world_size)
             checkpoint_kwargs = {
@@ -524,6 +725,11 @@ def run_training(
                 save_checkpoint(latest_path, **checkpoint_kwargs)
                 if is_best:
                     save_checkpoint(checkpoint_path, **checkpoint_kwargs)
+                    if prediction_records is not None:
+                        (artifact_dir / "best_val_predictions.json").write_text(
+                            json.dumps(prediction_records, ensure_ascii=False) + "\n",
+                            encoding="utf-8",
+                        )
                     print(f"saved best checkpoint to {checkpoint_path}")
 
                 write_training_history(history_path, history)
@@ -540,6 +746,7 @@ def run_training(
                     "val/accuracy": val_metrics["accuracy"],
                     "val/vqa_score": val_metrics["vqa_score"],
                     "val/top5_vqa_score": val_metrics["top5_vqa_score"],
+                    "val/official_vqa_score": val_metrics.get("official_vqa_score"),
                     "learning_rate": current_lr,
                     "best_metric": best_metric,
                     "epoch_seconds": epoch_row["epoch_seconds"],
@@ -549,7 +756,9 @@ def run_training(
                 print(
                     f"train_loss={train_metrics['loss']:.4f} train_vqa={train_metrics['vqa_score']:.4f} "
                     f"val_loss={val_metrics['loss']:.4f} val_acc={val_metrics['accuracy']:.4f} "
-                    f"val_vqa={val_metrics['vqa_score']:.4f} val_top5={val_metrics['top5_vqa_score']:.4f} "
+                    f"val_vqa={val_metrics['vqa_score']:.4f} "
+                    f"official_vqa={val_metrics.get('official_vqa_score', float('nan')):.2f} "
+                    f"val_top5={val_metrics['top5_vqa_score']:.4f} "
                     f"lr={current_lr:.2e} latest={latest_path}"
                 )
 
@@ -561,6 +770,7 @@ def run_training(
     finally:
         if is_main_process:
             run_metadata["finished_at"] = utc_now()
+            run_metadata.setdefault("status", "completed")
             run_metadata["total_seconds"] = elapsed_offset + time.perf_counter() - training_started
             run_metadata["best_metric"] = best_metric
             run_metadata["artifacts"] = {

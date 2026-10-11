@@ -1,11 +1,86 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import math
+from pathlib import Path
 from typing import Any
 
 import torch
 from torch import nn
+
+
+def _sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as source:
+        for chunk in iter(lambda: source.read(8 * 1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def compute_vqa_data_fingerprint(
+    root: str | Path,
+    train_split: str,
+    val_split: str,
+    answer_vocab: list[str],
+    answer_normalization: str,
+    visual_genome_qa_path: str | Path | None = None,
+) -> str:
+    root = Path(root)
+    split_fingerprints: dict[str, dict[str, Any]] = {}
+    for split in (train_split, val_split):
+        coco_split = "train2014" if split in {"train", "train2014"} else "val2014"
+        files = {
+            "questions": root / f"v2_OpenEnded_mscoco_{coco_split}_questions.json",
+            "annotations": root / f"v2_mscoco_{coco_split}_annotations.json",
+        }
+        split_fingerprints[coco_split] = {
+            name: _sha256_file(path) for name, path in files.items()
+        }
+        image_dir = root / coco_split
+        if not image_dir.is_dir():
+            raise FileNotFoundError(f"Missing image directory required for the data fingerprint: {image_dir}")
+        image_digest = hashlib.sha256()
+        image_count = 0
+        for image_path in sorted(image_dir.glob("*.jpg")):
+            image_digest.update(f"{image_path.name}:{image_path.stat().st_size}\n".encode("utf-8"))
+            image_count += 1
+        split_fingerprints[coco_split]["image_count"] = image_count
+        split_fingerprints[coco_split]["image_inventory_sha256"] = image_digest.hexdigest()
+
+    extra_sha = None
+    if visual_genome_qa_path:
+        extra_path = Path(visual_genome_qa_path)
+        if not extra_path.is_file():
+            raise FileNotFoundError(f"Configured Visual Genome QA manifest is missing: {extra_path}")
+        extra_sha = _sha256_file(extra_path)
+    payload = {
+        "splits": split_fingerprints,
+        "answer_vocab_sha256": hashlib.sha256(
+            json.dumps(answer_vocab, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+        ).hexdigest(),
+        "answer_normalization": answer_normalization,
+        "visual_genome_manifest_sha256": extra_sha,
+    }
+    return hashlib.sha256(json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
+
+
+def accumulation_settings_for_global_batch(
+    target_global_batch: int,
+    batch_size_per_gpu: int,
+    world_size: int,
+) -> dict[str, int]:
+    if target_global_batch <= 0 or batch_size_per_gpu <= 0 or world_size <= 0:
+        raise ValueError("Global batch, per-GPU batch, and world size must all be positive.")
+    per_rank_batch_total, remainder = divmod(target_global_batch, world_size)
+    if remainder or per_rank_batch_total % batch_size_per_gpu:
+        raise ValueError(
+            "The selected per-GPU batch must divide the target global batch evenly across all workers."
+        )
+    return {
+        "config_gradient_accumulation_steps": target_global_batch // batch_size_per_gpu,
+        "runtime_gradient_accumulation_steps_per_rank": per_rank_batch_total // batch_size_per_gpu,
+    }
 
 
 def stage_for_epoch(model_cfg: dict[str, Any], train_cfg: dict[str, Any], epoch: int) -> str:
@@ -37,7 +112,7 @@ def configure_finetune_stage(model: nn.Module, stage: str, train_cfg: dict[str, 
 
 
 def build_optimizer(model: nn.Module, train_cfg: dict[str, Any]) -> torch.optim.AdamW:
-    has_joint_backbone = any(name.startswith("backbone.") for name, _ in model.named_parameters())
+    has_joint_backbone = any(name.startswith(("backbone.", "beit3.")) for name, _ in model.named_parameters())
     learning_rates = {
         "head": float(train_cfg.get("head_lr", train_cfg["lr"])) if has_joint_backbone else float(train_cfg["lr"]),
         "image": float(train_cfg.get("image_lr", train_cfg["lr"])),
@@ -46,10 +121,16 @@ def build_optimizer(model: nn.Module, train_cfg: dict[str, Any]) -> torch.optim.
     }
     grouped: dict[tuple[str, bool], list[nn.Parameter]] = {}
     for name, parameter in model.named_parameters():
-        family = "backbone" if name.startswith("backbone.") else (
+        family = "backbone" if name.startswith(("backbone.", "beit3.")) else (
             "image" if name.startswith("image_encoder.") else "text" if name.startswith("text_encoder.") else "head"
         )
-        use_decay = not (name.endswith(".bias") or "norm" in name.lower())
+        use_decay = not (
+            name.endswith(".bias")
+            or "norm" in name.lower()
+            or "embed_positions" in name
+            or "cls_token" in name
+            or "mask_token" in name
+        )
         grouped.setdefault((family, use_decay), []).append(parameter)
 
     weight_decay = float(train_cfg.get("weight_decay", 0.01))
@@ -63,7 +144,10 @@ def build_optimizer(model: nn.Module, train_cfg: dict[str, Any]) -> torch.optim.
                 "group_name": f"{family}_{'decay' if use_decay else 'no_decay'}",
             }
         )
-    return torch.optim.AdamW(parameter_groups)
+    betas = tuple(float(value) for value in train_cfg.get("betas", (0.9, 0.999)))
+    if len(betas) != 2:
+        raise ValueError("train.betas must contain exactly two values.")
+    return torch.optim.AdamW(parameter_groups, betas=betas)
 
 
 class WarmupPlateauScheduler:
@@ -197,7 +281,10 @@ def resume_signature(config: dict[str, Any]) -> str:
     data_cfg = config["data"]
     train_cfg = config["train"]
     payload = {
-        "model": model_cfg,
+        "seed": config.get("seed"),
+        "model": {
+            key: value for key, value in model_cfg.items() if key not in {"cache_dir", "pretrained_model_path"}
+        },
         "data": {
             key: data_cfg.get(key)
             for key in (
@@ -208,6 +295,9 @@ def resume_signature(config: dict[str, Any]) -> str:
                 "max_val_samples",
                 "image_size",
                 "max_question_length",
+                "answer_normalization",
+                "visual_genome_sample_ratio",
+                "augmentation",
             )
         },
         "train": {
@@ -219,6 +309,7 @@ def resume_signature(config: dict[str, Any]) -> str:
                 "text_lr",
                 "backbone_lr",
                 "head_lr",
+                "betas",
                 "weight_decay",
                 "grad_clip_norm",
                 "gradient_accumulation_steps",
@@ -244,6 +335,7 @@ def resume_signature(config: dict[str, Any]) -> str:
             )
         },
     }
+    payload["data"]["visual_genome_qa_enabled"] = bool(data_cfg.get("visual_genome_qa_path"))
     return json.dumps(payload, sort_keys=True, separators=(",", ":"))
 
 

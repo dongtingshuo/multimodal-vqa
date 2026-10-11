@@ -6,6 +6,7 @@ import torch
 from torch import nn
 from torchvision.models import ResNet50_Weights, resnet50
 
+from .beit3 import BEiT3VQAModel
 from .hf import load_text_model, load_vilt_model
 
 
@@ -642,10 +643,16 @@ MODEL_REGISTRY = {
     "text_only": TextOnlyVQAModel,
     "image_only": ImageOnlyVQAModel,
     "vilt": ViltVQAModel,
+    "beit3_base": BEiT3VQAModel,
 }
 
 
-def build_model(config: dict, answer_vocab_size: int | None = None) -> nn.Module:
+def build_model(
+    config: dict,
+    answer_vocab_size: int | None = None,
+    *,
+    load_pretrained: bool = True,
+) -> nn.Module:
     model_cfg = dict(config.get("model", config))
     resolved_answer_vocab_size = answer_vocab_size or model_cfg.pop("answer_vocab_size", None)
     if resolved_answer_vocab_size is None:
@@ -660,4 +667,6 @@ def build_model(config: dict, answer_vocab_size: int | None = None) -> nn.Module
     except KeyError as exc:
         available = ", ".join(sorted(MODEL_REGISTRY))
         raise ValueError(f"Unknown model name '{model_name}'. Available models: {available}") from exc
+    if model_name == "beit3_base":
+        model_cfg["load_pretrained"] = load_pretrained
     return model_class(answer_vocab_size=int(resolved_answer_vocab_size), **model_cfg)

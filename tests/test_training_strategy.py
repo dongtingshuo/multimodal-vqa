@@ -6,6 +6,7 @@ from vqa_project.config import load_config
 from vqa_project.model import build_model
 from vqa_project.training import (
     WarmupPlateauScheduler,
+    accumulation_settings_for_global_batch,
     build_optimizer,
     build_scheduler,
     configure_finetune_stage,
@@ -65,6 +66,15 @@ def test_optimizer_uses_differential_learning_rates() -> None:
     assert any(group["weight_decay"] == 0.0 for group in optimizer.param_groups)
 
 
+def test_accumulation_settings_preserve_global_batch_for_ddp_config_semantics() -> None:
+    settings = accumulation_settings_for_global_batch(128, batch_size_per_gpu=2, world_size=2)
+
+    assert settings == {
+        "config_gradient_accumulation_steps": 64,
+        "runtime_gradient_accumulation_steps_per_rank": 32,
+    }
+
+
 def test_vilt_optimizer_uses_backbone_and_head_learning_rates() -> None:
     model = build_model({**model_config(), "name": "vilt", "freeze_backbones": False})
     optimizer = build_optimizer(
@@ -94,6 +104,19 @@ def test_resume_signature_rejects_effective_training_changes() -> None:
 
     assert resume_signature(original) != resume_signature(changed_batch)
     assert resume_signature(original) != resume_signature(changed_samples)
+
+
+def test_beit3_resume_signature_ignores_machine_asset_paths() -> None:
+    original = load_config("configs/kaggle_beit3_b_vg_t4x2.yaml")
+    changed = load_config("configs/kaggle_beit3_b_vg_t4x2.yaml")
+    changed["model"]["cache_dir"] = "/different/cache"
+    changed["data"]["visual_genome_qa_path"] = "/different/run/visual_genome_qa_train.json"
+
+    assert resume_signature(original) == resume_signature(changed)
+    validate_resume_config(changed, {"format_version": 4, "config": original})
+
+    no_visual_genome = load_config("configs/kaggle_beit3_a_t4x2.yaml")
+    assert resume_signature(original) != resume_signature(no_visual_genome)
 
 
 def test_warmup_cosine_scheduler_steps_without_metric() -> None:

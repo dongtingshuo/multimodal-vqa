@@ -152,7 +152,14 @@ def resolve_checkpoint_config(runtime_config: dict[str, Any], checkpoint: dict[s
 
     stored_data = stored_config.get("data")
     if isinstance(stored_data, dict):
-        for key in ("answer_vocab_size", "image_size", "max_question_length", "processor_name"):
+        for key in (
+            "answer_vocab_size",
+            "image_size",
+            "max_question_length",
+            "processor_name",
+            "answer_normalization",
+            "augmentation",
+        ):
             if key in stored_data:
                 resolved["data"][key] = stored_data[key]
     return resolved

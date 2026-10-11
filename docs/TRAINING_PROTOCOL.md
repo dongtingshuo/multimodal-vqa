@@ -47,13 +47,17 @@ Training-time validation metrics are computed on the 209,608 examples with at le
 
 训练阶段的验证指标只统计至少含一个 Top-3000 答案的 209,608 个问题；预测导出和官方评估覆盖全部 214,354 个问题。比较不同运行时必须明确指标样本范围；发布对比以官方分数为准。全验证集答案空间与错误诊断见 [v0.3.0-vilt-diagnostics.md](evaluation/v0.3.0-vilt-diagnostics.md)。
 
-## Conditional Run 2 / 条件第二轮
+## Historical ViLT Run 2 Protocol / 历史 ViLT 第二轮协议
 
-At most one follow-up full run is allowed. `scripts/select_vilt_followup.py` reads Run 1 history and selects exactly one branch. Validation instability takes priority; otherwise, a train-validation VQA gap above `0.10` selects partial fine-tuning of the final six ViLT layers. This is the predeclared metric-improvement candidate for the current run. Seed replication is reserved for stable runs and measures variance, not expected score gain.
+This section records the closed ViLT follow-up protocol that governed Kaggle Version 34. It is historical and does not authorize another unchanged ViLT run. Version 34 scored `68.08` under the official validation protocol and was not promoted.
+
+本节记录已经结束的 ViLT 后续实验协议，对应 Kaggle Version 34。它仅作历史记录，不构成继续原样训练 ViLT 的授权。Version 34 官方验证分数为 `68.08`，未予晋升。
+
+The historical ViLT protocol allowed at most one follow-up full run. `scripts/select_vilt_followup.py` read the prior run history and selected exactly one branch. Validation instability took priority; otherwise, a train-validation VQA gap above `0.10` selected partial fine-tuning of the final six ViLT layers. Seed replication was reserved for stable runs and measured variance, not expected score gain.
 
 最多允许再执行一次全量训练。`scripts/select_vilt_followup.py` 读取首轮历史并只选择一个分支。优先处理验证不稳定；否则训练/验证 VQA 差距大于 `0.10` 时，仅微调 ViLT 最后 6 层。对当前运行而言，这是预先定义的提分候选。seed 复现仅用于稳定运行的方差估计，不承诺提分。
 
-Current evidence selects the last-six-layer branch: the recorded maximum train-validation VQA gap is `0.1754`, with no repeated validation drops above `0.03`. The ready-to-run configuration is `configs/kaggle_vilt_last6.yaml`; it keeps seed, effective batch, optimizer, epoch budget, preprocessing, and evaluation fixed. The only model/training variable changed is the ViLT trainable layer scope; the run name and checkpoint directory are distinct to preserve Run 1 artifacts.
+Version 34 used the last-six-layer branch because the recorded maximum train-validation VQA gap was `0.1754`, with no repeated validation drops above `0.03`. Its configuration was `configs/kaggle_vilt_last6.yaml`; seed, effective batch, optimizer, epoch budget, preprocessing, and evaluation remained fixed. The ViLT trainable layer scope was the only planned model/training variable change; artifacts used a separate run name and checkpoint directory.
 
 当前数据选中“最后 6 层”分支：记录到的最大训练/验证 VQA 差距为 `0.1754`，且没有连续出现超过 `0.03` 的验证分数下降。可直接使用 `configs/kaggle_vilt_last6.yaml`；它保持 seed、有效 batch、优化器、epoch 上限、预处理和评估不变。模型/训练变量仅改变 ViLT 可训练层范围；实验名和 checkpoint 目录单独设置，以保留首轮产物。
 
@@ -69,7 +73,9 @@ torchrun --standalone --nproc_per_node=2 train.py --config configs/kaggle_vilt_l
 | Both internal targets met, with no instability or large gap | Repeat with seed 1337 for stability only |
 | Stable but below target | Backbone LR `3e-5` |
 
-All other data, objective, batch, epoch budget, preprocessing, evaluation, and artifact settings remain fixed. There is no third full run in this protocol.
+All other data, objective, batch, epoch budget, preprocessing, evaluation, and artifact settings remain fixed. There is no third full run in this historical ViLT protocol.
+
+除选中变量外，其他数据、目标函数、batch、epoch 预算、预处理、评估和产物设置全部保持不变。该历史 ViLT 协议不安排第三次全量训练。
 
 除选中变量外，数据、目标函数、batch、epoch 上限、预处理、评估和产物设置全部保持不变。本协议不安排第三次全量训练。
 
@@ -88,3 +94,45 @@ Local/Kaggle artifacts and embedded checkpoint configuration are the source of r
 The supported runtime is Python 3.10+ with PyTorch 2.5.1+ and Transformers 5.10+. Root requirements use `transformers>=5.10,<6.0`; AutoDL and Kaggle use the same Transformers range, and the Kaggle fallback pairs PyTorch 2.5.1 with torchvision 0.20.1 on CUDA 12.1. Keep these constraints aligned across every install path. Before changing the Transformers major version again, verify checkpoint load/inference, processor compatibility, gradient-checkpointing, and a real one-epoch training smoke run.
 
 支持的运行环境为 Python 3.10+、PyTorch 2.5.1+ 和 Transformers 5.10+。根目录依赖使用 `transformers>=5.10,<6.0`；AutoDL 和 Kaggle 使用相同 Transformers 范围，Kaggle 回退安装使用 CUDA 12.1 对应的 PyTorch 2.5.1 与 torchvision 0.20.1。所有安装入口必须保持约束一致。下次升级 Transformers 主版本前，须验证 checkpoint 加载/推理、processor 兼容性、gradient checkpointing 和真实单 epoch 训练 smoke run。
+
+## BEiT-3 Improvement Program / BEiT-3 提分计划
+
+### Baseline and target / 基线与目标
+
+The unchanged comparison baseline is the recommended ViLT `v0.3.0` checkpoint at `68.42` official VQA v2 validation overall. The aspirational acceptance target is `>=75.00` for the selected experiment and `>=74.50` for an independent seed replication. These are targets, not predicted outcomes. The validation set is fixed at all 214,354 public questions and is never used for training or vocabulary construction.
+
+固定对照基线为推荐 ViLT `v0.3.0`，官方 VQA v2 验证 overall 为 `68.42`。目标为优选实验 `>=75.00`，独立 seed 复现 `>=74.50`。这是验收目标，不是结果预测。验证集固定为全部 214,354 条公开问题，绝不用于训练或词表构建。
+
+### Experiment matrix / 实验矩阵
+
+| Run | Training source | Seed | Config |
+| --- | --- | ---: | --- |
+| A | VQA v2 train only | 42 | `configs/kaggle_beit3_a_t4x2.yaml` |
+| B | VQA v2 train plus screened Visual Genome QA from COCO training images | 42 | `configs/kaggle_beit3_b_vg_t4x2.yaml` |
+| C | Independently initialize the better A/B recipe | 123 | `configs/kaggle_beit3_c_seed123_t4x2.yaml` |
+
+Use no more than these three full experiments. A/B keep the model and training recipe identical; the VG source is the only planned data change. Every B epoch traverses all VQA train examples and samples without replacement up to 25% as many screened VG QA pairs, with a deterministic `seed + epoch` sampler shared across ranks. After comparing A/B, generate C from the winner with `scripts/create_beit3_replication_config.py`; C then copies the selected recipe and changes only the seed. VG preparation must log source checksums and filter counts, map only to COCO images used by the VQA training split, and reject validation-image overlap, invalid mappings, duplicate normalized question/answer pairs, and answers outside the Top-5000 VQA-training vocabulary. B never uses VQA validation answers.
+
+完整实验最多执行上述三组。A/B 的模型和训练配方一致，仅按计划改变 VG 数据源。B 每轮完整遍历所有 VQA 训练样本，并使用 `seed + epoch` 的跨 rank 确定性采样器，从筛选后的 VG 问答中无放回抽取不超过 VQA 数量 25% 的样本。比较 A/B 后，使用 `scripts/create_beit3_replication_config.py` 从胜出配置生成 C，确保 C 只改变随机种子。VG 准备流程必须记录源文件校验和与过滤计数，仅映射到 VQA 训练 split 使用的 COCO 图片，并排除验证图片重叠、无效映射、重复规范化问答及 Top-5000 VQA 训练词表外答案。B 不得使用 VQA 验证答案。
+
+### Hardware gate / 硬件门槛
+
+On the actual dual-T4 session, `scripts/benchmark_beit3_batch.py` measures per-GPU micro-batches 1/2/4/8. `scripts/prepare_beit3_runtime_config.py` selects the fastest candidate whose peak allocated and reserved memory stay below 88% of device memory, applies it to an isolated runtime YAML, and preserves global effective batch 128. The Kaggle runner and notebook invoke both automatically; resume must reuse the same report/config. Then `scripts/smoke_beit3_distributed.py` must show both GPUs completing two finite forward/backward optimizer steps, synchronized parameters, and restored model, optimizer, scaler, per-rank RNG, data-generator state, and step cursor. After full data validation, `scripts/estimate_beit3_runtime.py` records a planning estimate using measured throughput and the actual question counts; its 1.5x margin is explicitly approximate. No full training is allowed until hardware gates and strict full-data validation pass.
+
+在目标双 T4 会话，`scripts/benchmark_beit3_batch.py` 测量每卡 micro-batch 1/2/4/8。`scripts/prepare_beit3_runtime_config.py` 会选择峰值已分配和预留显存均低于设备显存 88% 的最快配置，写入独立运行 YAML，并保持全局有效 batch 128。Kaggle runner 和 notebook 会自动调用，两者续训时必须复用同一报告和配置。随后 `scripts/smoke_beit3_distributed.py` 必须证明两张卡完成两次有限值前向/反向 optimizer step、参数同步，并恢复模型、优化器、scaler、各 rank RNG、数据生成器状态和 step 游标。全量数据严格校验后，`scripts/estimate_beit3_runtime.py` 会根据实测吞吐和实际问题数生成规划估算；其中 1.5 倍缓冲仅为近似值。硬件门槛与完整数据校验未通过前，禁止全量训练。
+
+### Training and resume / 训练与续训
+
+The initial recipe uses generic BEiT-3 Base pretraining, a fresh VQA head, 480 px official preprocessing, full-backbone fine-tuning, Top-5000 training-only vocabulary, AdamW (backbone LR `3e-5`, head LR `6e-4`, betas `(0.9, 0.98)`, weight decay `0.01`), gradient clipping `1.0`, 10% warmup followed by cosine decay, AMP, activation checkpointing, and up to 10 epochs. Random crop, flip, and color jitter remain disabled. From epoch 4, stop after three consecutive epochs without at least `0.1` official-score improvement.
+
+初始配方使用通用 BEiT-3 Base 预训练权重和新建 VQA 分类头，采用 480 px 官方预处理、仅由训练数据构建的 Top-5000 词表、AdamW（骨干 LR `3e-5`、分类头 LR `6e-4`、betas `(0.9, 0.98)`、weight decay `0.01`）、梯度裁剪 `1.0`、10% warmup 后 cosine decay、AMP、activation checkpoint，最多 10 epoch。不启用随机裁剪、翻转或颜色扰动。从 epoch 4 起，若连续三轮官方分数提升均不足 `0.1`，则停止。
+
+Write `latest.pt` every 500 optimizer updates and at each epoch boundary. A resumable checkpoint must include data/config/model fingerprints, optimizer, scheduler, scaler, all-rank RNG states, and the in-epoch sample cursor. Stop Kaggle sessions before the platform limit, preserve all run artifacts in a private output Dataset, and resume only if the fingerprint and world size match. W&B remains disabled.
+
+每 500 次 optimizer update 和每个 epoch 边界写入 `latest.pt`。可续训 checkpoint 必须保存数据/配置/模型指纹、优化器、调度器、scaler、各 rank 随机状态和 epoch 内样本游标。Kaggle 会话须在平台限制前主动停止，并将完整产物保存在私有输出 Dataset 中；只有指纹和 world size 一致时才可恢复。W&B 保持关闭。
+
+### Official evaluation and promotion / 官方评测与晋升
+
+For each completed candidate, export predictions for all validation IDs, compare the IDs exactly against questions and annotations, and run the upstream VQA Evaluation Toolkit twice with identical output. Report overall plus `yes/no`, `number`, and `other`, full data/config/source hashes, history, curves, and checkpoints. If the acceptance targets are missed, report the actual results without substituting internal VQA metrics, ensembles, a partial split, or a changed protocol. Keep `v0.3.0` recommended until the best A/B run reaches `75.00`, the independent C run reaches `74.50`, and all artifact and evaluation checks pass.
+
+每个完成的候选模型都须导出全部验证 ID 的预测，与 questions 和 annotations 精确比对，并运行上游 VQA Evaluation Toolkit 两次且结果一致。报告 overall、`yes/no`、`number`、`other`、完整数据/配置/来源哈希、训练历史、曲线与 checkpoint。若未达验收目标，按实际结果报告，不得以内部 VQA 指标、集成、部分数据或修改协议替代。优选 A/B 达到 `75.00`、独立 C 达到 `74.50` 且所有产物/评测检查通过前，`v0.3.0` 始终为推荐版本。

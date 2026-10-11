@@ -54,7 +54,7 @@ def test_checkpoint_format_records_config_and_metadata(tmp_path) -> None:
         metadata={"git_commit": "abc123"},
     )
     checkpoint = load_checkpoint(path, torch.device("cpu"))
-    assert checkpoint["format_version"] == 3
+    assert checkpoint["format_version"] == 4
     assert checkpoint["config"]["model"]["name"] == "test"
     assert checkpoint["metadata"]["git_commit"] == "abc123"
     assert not path.with_suffix(".pt.tmp").exists()
@@ -212,3 +212,51 @@ def test_restore_training_checkpoint_moves_rng_states_to_cpu(tmp_path, monkeypat
     assert torch_state.cpu_called
     assert cuda_state.cpu_called
     assert generator_state.cpu_called
+
+
+def test_mid_epoch_resume_matches_uninterrupted_training() -> None:
+    initial = TinyVQAModel()
+    full = TinyVQAModel()
+    resumed = TinyVQAModel()
+    full.load_state_dict(initial.state_dict())
+    resumed.load_state_dict(initial.state_dict())
+    full_optimizer = torch.optim.SGD(full.parameters(), lr=0.05)
+    resumed_optimizer = torch.optim.SGD(resumed.parameters(), lr=0.05)
+
+    full_metrics = train_one_epoch(
+        full,
+        tiny_batches(),
+        full_optimizer,
+        torch.device("cpu"),
+        grad_clip_norm=0.0,
+    )
+    checkpoint_events = []
+
+    def stop_after_second_batch(event):
+        checkpoint_events.append(event)
+        return event["batch_in_epoch"] == 2
+
+    partial_metrics = train_one_epoch(
+        resumed,
+        tiny_batches(),
+        resumed_optimizer,
+        torch.device("cpu"),
+        grad_clip_norm=0.0,
+        checkpoint_callback=stop_after_second_batch,
+    )
+    assert partial_metrics["interrupted"] == 1.0
+    assert checkpoint_events[-1]["batch_in_epoch"] == 2
+
+    resumed_metrics = train_one_epoch(
+        resumed,
+        tiny_batches(),
+        resumed_optimizer,
+        torch.device("cpu"),
+        grad_clip_norm=0.0,
+        start_batch=2,
+        initial_totals=checkpoint_events[-1]["local_totals"],
+    )
+    assert full_metrics["loss"] == pytest.approx(resumed_metrics["loss"])
+    assert full_metrics["accuracy"] == pytest.approx(resumed_metrics["accuracy"])
+    for full_parameter, resumed_parameter in zip(full.parameters(), resumed.parameters()):
+        assert torch.allclose(full_parameter, resumed_parameter)

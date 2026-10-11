@@ -14,6 +14,7 @@ A research-oriented multimodal Visual Question Answering system with data prepar
 | --- | --- | ---: | ---: | ---: |
 | ViLT seed-42 checkpoint (`v0.3.0`) | Recommended engineering release / 推荐工程版本 | **0.6126** | **0.7101** | **68.42** |
 | ViLT T4x2 continuation (Kaggle V34) | Evaluated experiment; not promoted / 已评测实验；未晋升 | 0.6084 | 0.7067 | 68.08 |
+| BEiT-3 Base A/B/C | Experimental implementation; training and evaluation pending / 实验性实现；待训练和评测 | — | — | — |
 | Staged cross-attention checkpoint (`v0.2.0`) | Archived comparison release / 历史对照版本 | 0.5239 | 0.6233 | Not evaluated |
 | Legacy checkpoint (`v0.1.0`) | Archived release / 历史发布 | 0.4775 | Not recorded | Not evaluated |
 
@@ -28,6 +29,7 @@ Kaggle V34 从 epoch 4 继续同一 ViLT 实验，并在 epoch 6 早停，验证
 ## Core Capabilities / 核心能力
 
 - **Multimodal architecture / 多模态架构**: ViLT joint vision-language transformer plus the established ResNet-50/DistilBERT cross-attention family.
+- **Experimental backbone / 实验性骨干**: optional BEiT-3 Base VQA path with verified pretrained assets and official VQA-v2 preprocessing; it has no project-trained score yet and is not the recommended checkpoint.
 - **Model variants / 模型变体**: `vilt`, `text_only`, `image_only`, `baseline_concat`, `cross_attention`, and `strong_cross_attention` share one model factory and inference interface.
 - **Comparison workflow / 对比流程**: lightweight report generation for validating model-variant comparison without external downloads.
 - **Question-type error analysis / 问题类型错误分析**: keyword-based diagnostics for color, count, object, location, yes/no, and other questions.
@@ -38,7 +40,7 @@ Kaggle V34 从 epoch 4 继续同一 ViLT 实验，并在 epoch 6 早停，验证
 - **Reproducible configuration / 可复现实验配置**: all runtime settings are centralized in YAML config files.
 - **VQA-aware evaluation / VQA 评估**: soft-answer VQA score, Top-5 VQA score, hard Top-1 accuracy, and per-example multilabel loss.
 - **Experiment tracking / 实验记录**: run directories, epoch history, curves, parameter-group learning rates, elapsed time, environment versions, and Git commit metadata.
-- **Resumable checkpoints / 可续训权重**: format-v3 checkpoints preserve model, optimizer, scheduler, AMP scaler, RNG, history, and stage state for state-complete continuation.
+- **Resumable checkpoints / 可续训权重**: current checkpoints preserve model, optimizer, scheduler, AMP scaler, RNG, history, and stage state, including mid-epoch recovery for the BEiT-3 experiments; older formats remain loadable.
 - **Toy demo / 玩具演示**: tiny example files support offline workflow checks for reports and diagnostics.
 - **Operational demo / 可运行演示**: Gradio interface supports image upload, question input, and Top-k answer display.
 - **Robust local runtime / 稳定本地运行**: demo handles missing checkpoints, occupied ports, CUDA fallback, and Hugging Face cache behavior with clear messages.
@@ -52,7 +54,10 @@ Kaggle V34 从 epoch 4 继续同一 ViLT 实验，并在 epoch 6 早停，验证
 │   ├── baseline_frozen.yaml  # Controlled frozen baseline / 受控冻结基线
 │   ├── kaggle_finetune.yaml  # Staged Kaggle fine-tuning / Kaggle 分阶段微调
 │   ├── kaggle_strong.yaml    # Stronger Kaggle training recipe / Kaggle 强化训练配置
-│   ├── kaggle_vilt.yaml      # Recommended ViLT experiment / 推荐 ViLT 实验配置
+│   ├── kaggle_vilt.yaml      # ViLT comparison recipe / ViLT 对照配置
+│   ├── kaggle_beit3_a_t4x2.yaml # BEiT-3 VQA-only run / BEiT-3 纯 VQA 训练
+│   ├── kaggle_beit3_b_vg_t4x2.yaml # BEiT-3 + screened VG / BEiT-3 加筛选后 VG
+│   ├── kaggle_beit3_c_seed123_t4x2.yaml # Independent seed / 独立随机种子复现
 │   ├── cross_attention.yaml  # Cross-modal attention variant / 跨模态注意力变体
 │   ├── baseline_concat.yaml  # Feature-concatenation baseline / 特征拼接基线
 │   ├── text_only.yaml        # Text-only baseline / 纯文本基线
@@ -75,11 +80,18 @@ Kaggle V34 从 epoch 4 继续同一 ViLT 实验，并在 epoch 6 早停，验证
 │   ├── summarize_experiments.py # Comparison and release gate / 对比与发布门槛
 │   ├── summarize_runs.py     # Run-directory leaderboard / run 目录汇总
 │   ├── select_vilt_followup.py # Controlled Run-2 selector / 受控第二轮选择器
+│   ├── benchmark_beit3_batch.py # T4 batch-capacity benchmark / T4 batch 容量测试
+│   ├── smoke_beit3_distributed.py # Dual-GPU save/resume smoke / 双卡保存续训检查
+│   ├── prepare_beit3_runtime_config.py # Apply measured batch / 应用实测 batch
+│   ├── estimate_beit3_runtime.py # Data-sized runtime estimate / 按数据规模估算耗时
+│   ├── prepare_visual_genome_qa.py # Leakage-screened VG preparation / VG 泄漏筛查
+│   ├── create_beit3_replication_config.py # Winner-recipe seed-123 config / 胜出配方 seed-123 配置
 │   ├── run_model_comparison.py
 │   └── run_error_analysis.py
 ├── tests/
 │   └── test_*.py             # Offline unit and workflow tests / 离线单元与流程测试
 ├── vqa_project/
+│   ├── beit3.py              # Optional BEiT-3 backbone and asset checks / 可选 BEiT-3 骨干与权重校验
 │   ├── analysis/             # Error-analysis utilities / 错误分析工具
 │   ├── answers.py            # Answer normalization and vocabulary / 答案规范化与词表
 │   ├── config.py             # YAML config loading and device resolution / 配置加载与设备解析
@@ -227,6 +239,30 @@ python train.py --config configs/kaggle_strong.yaml --device cuda --no-wandb
 python train.py --config configs/kaggle_vilt.yaml --device cuda --no-wandb
 ```
 
+### Experimental BEiT-3 Route / BEiT-3 实验路线
+
+BEiT-3 is an optional, untrained research candidate. The existing ViLT `v0.3.0` release remains recommended until a candidate completes the full protocol and exceeds the same official validation score. The BEiT-3 source implementation is MIT-licensed; the project pins the TorchScale commit and verifies the downloaded Base checkpoint and SentencePiece model by SHA-256 before use. See the [BEiT-3 experiment protocol](docs/TRAINING_PROTOCOL.md) and [model card](MODEL_CARD.md#experimental-candidate-beit-3-base).
+
+BEiT-3 是尚未训练出项目指标的可选研究候选。候选完整通过实验协议并在同一官方验证集上超过现有结果前，仍以 ViLT `v0.3.0` 为推荐版本。BEiT-3 上游实现采用 MIT 许可证；本项目固定 TorchScale commit，并在使用前校验 Base 权重和 SentencePiece 文件的 SHA-256。详见 [BEiT-3 实验协议](docs/TRAINING_PROTOCOL.md)和[模型卡](MODEL_CARD.md#experimental-candidate-beit-3-base)。
+
+Install the optional dependencies and run the two-GPU capacity and save/resume gates before a full run:
+
+```bash
+python -m pip install -e ".[beit3]"
+torchrun --standalone --nproc_per_node=2 scripts/benchmark_beit3_batch.py \
+  --output /kaggle/working/beit3_batch_benchmark.json
+torchrun --standalone --nproc_per_node=2 scripts/smoke_beit3_distributed.py \
+  --output-dir /kaggle/working
+```
+
+The Kaggle runner and notebook measure per-GPU batch sizes 1, 2, 4, and 8, then automatically write `runtime_config.yaml` with the fastest safe choice while preserving global batch 128. Resume sessions reuse this config and benchmark report. Before full training, the smoke gate loads real pretrained weights, performs two DDP updates, checks cross-GPU synchronization, and round-trips a resumable checkpoint; after full-data validation, an isolated 128-example run exercises the real VQA data path. A throughput-based estimate then records approximate epoch time and Kaggle session count. These estimates are planning aids, not guarantees. The local machine has no CUDA device, so the GPU gates must be run on Kaggle and are not represented as locally passed.
+
+Kaggle runner 和 notebook 会测量每卡 batch 1、2、4、8，并自动生成 `runtime_config.yaml`，选择最快且满足显存余量的配置，同时保持全局 batch 128；续训会复用这份配置和 benchmark 报告。全量训练前，硬件 smoke 会加载真实预训练权重、完成两次 DDP 更新、检查跨卡同步，并实际保存和恢复续训 checkpoint；完整数据校验后再用隔离的 128 样本训练检查真实 VQA 数据流程，随后按实测吞吐估算每轮耗时和 Kaggle 会话数。耗时只是规划参考，不是承诺。本机没有 CUDA，因此 GPU 门槛必须在 Kaggle 执行，当前不能称为本地已通过。
+
+Three isolated configurations are provided: A uses VQA v2 only (seed 42), B adds only screened Visual Genome QA, and C independently repeats the better of A/B with seed 123. Use the maintained Kaggle runner for B so it downloads, filters, fingerprints, and packages Visual Genome inputs before training. Never point the run at VQA validation answers. Full commands and resume behavior are documented in [Kaggle Training](docs/KAGGLE.md).
+
+提供三份互相隔离的配置：A 仅使用 VQA v2（seed 42）；B 额外使用经筛选的 Visual Genome QA；C 使用 seed 123 独立复现 A/B 中较优方案。B 应通过维护中的 Kaggle runner 启动，由其在训练前下载、筛选并记录 Visual Genome 输入指纹。禁止将 VQA 验证答案用于训练。完整命令与续训说明见 [Kaggle 训练文档](docs/KAGGLE.md)。
+
 Default training config / 默认训练配置：
 
 ```yaml
@@ -270,7 +306,7 @@ W&B integration remains available as an optional dependency for custom runs, but
 
 W&B 仍作为自定义实验的可选依赖保留，但维护中的 Kaggle 流程不需要 W&B 凭据，当前固定使用 `--no-wandb`。
 
-Resume a format-v3 run / 继续 format-v3 训练：
+Resume a ViLT format-v3 run / 继续 ViLT format-v3 训练：
 
 ```bash
 python train.py \

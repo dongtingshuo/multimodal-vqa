@@ -40,9 +40,15 @@ def main() -> None:
     model_cfg = config["model"]
     train_cfg = config["train"]
     answer_vocab = AnswerVocab(
-        checkpoint.get("idx_to_answer") or AnswerVocab.load(data_cfg["answer_vocab_path"]).idx_to_answer
+        checkpoint.get("idx_to_answer") or AnswerVocab.load(data_cfg["answer_vocab_path"]).idx_to_answer,
+        normalization=str(checkpoint.get("answer_vocab_normalization", "legacy")),
     )
-    input_pipeline = build_input_pipeline(model_cfg, data_cfg)
+    checkpoint_tokenizer = Path(args.checkpoint).resolve().parent / "beit3.spm"
+    input_pipeline = build_input_pipeline(
+        model_cfg,
+        data_cfg,
+        tokenizer_path=checkpoint_tokenizer if checkpoint_tokenizer.is_file() else None,
+    )
 
     val_dataset = VQADataset(
         root=data_cfg["root"],
@@ -53,6 +59,7 @@ def main() -> None:
         train=False,
         filter_without_known_answer=not bool(args.predictions_output),
         image_mode=input_pipeline.image_mode,
+        beit3_preprocessing=model_cfg.get("name") == "beit3_base",
     )
     num_workers = int(data_cfg.get("num_workers", 0))
     pin_memory = bool(train_cfg.get("pin_memory", device.type == "cuda")) and device.type == "cuda"
@@ -67,7 +74,7 @@ def main() -> None:
         persistent_workers=persistent_workers,
     )
 
-    model = build_model(model_cfg, answer_vocab_size=len(answer_vocab)).to(device)
+    model = build_model(model_cfg, answer_vocab_size=len(answer_vocab), load_pretrained=False).to(device)
     model.load_state_dict(checkpoint["model_state"])
     prediction_records: list[dict] | None = [] if args.predictions_output else None
     metrics = evaluate(

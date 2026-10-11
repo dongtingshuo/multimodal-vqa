@@ -7,6 +7,7 @@ import stat
 import subprocess
 import sys
 import tarfile
+import tempfile
 import threading
 import time
 import urllib.parse
@@ -19,8 +20,11 @@ from typing import Optional
 
 WORK_ROOT = Path(os.environ.get("WORK_ROOT", "/kaggle/working/multimodal-vqa"))
 REPO_ROOT = Path(os.environ.get("REPO_ROOT", "/kaggle/working/multimodal-vqa-repo"))
-RUN_NAME = os.environ.get("RUN_NAME", "vilt-last6-t4x2")
-CONFIG_PATH = os.environ.get("CONFIG_PATH", "configs/kaggle_vilt_last6_t4x2.yaml")
+CONFIG_PATH = os.environ.get("CONFIG_PATH", "configs/kaggle_beit3_a_t4x2.yaml")
+CONFIG_KEY = Path(CONFIG_PATH).stem.lower()
+BEIT3_VARIANT = "b-vg-seed42" if "_b_" in CONFIG_KEY else "c-seed123" if "_c_" in CONFIG_KEY else "a-seed42"
+DEFAULT_RUN_NAME = f"beit3-vqa-{BEIT3_VARIANT}-t4x2" if "beit3" in CONFIG_KEY else "vilt-last6-t4x2"
+RUN_NAME = os.environ.get("RUN_NAME", DEFAULT_RUN_NAME)
 GIT_REF = os.environ.get("GIT_REF", "main")
 TOTAL_EPOCHS = os.environ.get("TOTAL_EPOCHS", "10")
 VQA_NUM_GPUS = os.environ.get("VQA_NUM_GPUS", "2").strip().lower()
@@ -69,11 +73,12 @@ PACKAGED_SPLITS = {
         ),
     },
 }
-RESUME_ROOT = Path(
-    os.environ.get("RESUME_ROOT", "/kaggle/input/multimodal-vqa-vilt-last6-t4x2-resume")
+DEFAULT_RESUME_DATASET_SLUG = (
+    f"multimodal-vqa-beit3-{BEIT3_VARIANT}-resume" if "beit3" in CONFIG_KEY else "multimodal-vqa-vilt-last6-t4x2-resume"
 )
-RESUME_DATASET_SLUG = "multimodal-vqa-vilt-last6-t4x2-resume"
-RESUME_DATASET_OWNER = "dongtingshuo"
+RESUME_DATASET_SLUG = os.environ.get("RESUME_DATASET_SLUG", DEFAULT_RESUME_DATASET_SLUG)
+RESUME_DATASET_OWNER = os.environ.get("RESUME_DATASET_OWNER", "dongtingshuo")
+RESUME_ROOT = Path(os.environ.get("RESUME_ROOT", f"/kaggle/input/{RESUME_DATASET_SLUG}"))
 TORCH_VERSION = os.environ.get("TORCH_VERSION", "2.5.1+cu121")
 TORCHVISION_VERSION = os.environ.get("TORCHVISION_VERSION", "0.20.1+cu121")
 TRANSFORMERS_SPEC = os.environ.get("TRANSFORMERS_SPEC", "transformers>=5.10,<6.0")
@@ -97,11 +102,15 @@ DOWNLOAD_ROOT = WORK_ROOT / "downloads"
 RESUME_FILES = (
     "latest.pt",
     "best.pt",
+    "runtime_config.yaml",
+    "beit3_batch_benchmark.json",
+    "beit3_capacity_estimate.json",
     "config.snapshot.json",
     "training_history.csv",
     "training_curves.png",
     "run_metadata.json",
     "run_summary.json",
+    "training_paused.json",
 )
 
 VQA_DOWNLOADS = {
@@ -109,6 +118,10 @@ VQA_DOWNLOADS = {
     "v2_mscoco_train2014_annotations.json": "https://s3.amazonaws.com/cvmlp/vqa/mscoco/vqa/v2_Annotations_Train_mscoco.zip",
     "v2_OpenEnded_mscoco_val2014_questions.json": "https://s3.amazonaws.com/cvmlp/vqa/mscoco/vqa/v2_Questions_Val_mscoco.zip",
     "v2_mscoco_val2014_annotations.json": "https://s3.amazonaws.com/cvmlp/vqa/mscoco/vqa/v2_Annotations_Val_mscoco.zip",
+}
+VISUAL_GENOME_DOWNLOADS = {
+    "image_data.json": "https://visualgenome.org/files/static/data/dataset/image_data.json",
+    "question_answers.json": "https://visualgenome.org/files/static/data/dataset/question_answers.json",
 }
 COCO_IMAGE_RE = re.compile(r"COCO_(?:train|val)2014_(\d{12})\.jpg$")
 HEARTBEAT_SECONDS = 60
@@ -385,6 +398,118 @@ def install_training_dependencies():
         ],
         cwd=REPO_ROOT,
     )
+    if "beit3" in CONFIG_PATH.lower():
+        run(
+            [
+                "python",
+                "-m",
+                "pip",
+                "install",
+                "torchscale @ git+https://github.com/microsoft/torchscale.git@4d1e0e82e5adf86dd424f1463192635b73fc8efc",
+                "fairscale==0.4.0",
+                "timm==0.6.13",
+                "einops>=0.6",
+                "sentencepiece>=0.2.0",
+            ],
+            cwd=REPO_ROOT,
+        )
+
+
+def _script_command(training_command, script):
+    if not training_command or training_command[-1] != "train.py":
+        raise ValueError("Expected a training launcher ending in train.py.")
+    return [*training_command[:-1], script]
+
+
+def _launcher_world_size(training_command):
+    prefix = "--nproc_per_node="
+    for part in training_command:
+        if part.startswith(prefix):
+            return int(part.removeprefix(prefix))
+    return 1
+
+
+def prepare_beit3_runtime(training_command):
+    if "beit3" not in CONFIG_PATH.lower():
+        return CONFIG_PATH
+
+    from vqa_project.config import load_config
+
+    config = load_config(Path(CONFIG_PATH) if Path(CONFIG_PATH).is_absolute() else REPO_ROOT / CONFIG_PATH)
+    model_cfg = config["model"]
+    data_cfg = config["data"]
+    world_size = _launcher_world_size(training_command)
+    benchmark_path = CHECKPOINT_DIR / "beit3_batch_benchmark.json"
+    runtime_config_path = CHECKPOINT_DIR / "runtime_config.yaml"
+    cache_dir = model_cfg.get("cache_dir")
+
+    if not runtime_config_path.is_file():
+        benchmark_command = _script_command(training_command, "scripts/benchmark_beit3_batch.py")
+        benchmark_command.extend(
+            [
+                "--image-size",
+                str(data_cfg["image_size"]),
+                "--max-question-length",
+                str(data_cfg["max_question_length"]),
+                "--answer-vocab-size",
+                str(data_cfg["answer_vocab_size"]),
+                "--output",
+                benchmark_path,
+            ]
+        )
+        if cache_dir:
+            benchmark_command.extend(["--cache-dir", cache_dir])
+        with progress_stage("BEiT-3 batch benchmark"):
+            run(benchmark_command, cwd=REPO_ROOT)
+            run(
+                [
+                    "python",
+                    "-u",
+                    "scripts/prepare_beit3_runtime_config.py",
+                    "--config",
+                    CONFIG_PATH,
+                    "--benchmark",
+                    benchmark_path,
+                    "--output",
+                    runtime_config_path,
+                    "--world-size",
+                    str(world_size),
+                ],
+                cwd=REPO_ROOT,
+            )
+    else:
+        runtime_config = load_config(runtime_config_path)
+        benchmark_settings = runtime_config.get("runtime", {}).get("batch_benchmark", {})
+        if int(benchmark_settings.get("world_size", 0)) != world_size:
+            raise ValueError(
+                "The saved BEiT-3 runtime config was benchmarked with a different number of GPUs. "
+                "Resume with the same GPU count or start a fresh run."
+            )
+        if not benchmark_path.is_file():
+            raise FileNotFoundError(
+                f"The resumable run is missing its batch benchmark report: {benchmark_path}."
+            )
+        progress(
+            f"reusing measured BEiT-3 config: batch_per_gpu={runtime_config['train']['batch_size']} "
+            f"gradient_accumulation={runtime_config['train']['gradient_accumulation_steps']}"
+        )
+
+    smoke_command = _script_command(training_command, "scripts/smoke_beit3_distributed.py")
+    smoke_command.extend(
+        [
+            "--image-size",
+            str(data_cfg["image_size"]),
+            "--expected-gpus",
+            str(world_size),
+            "--output-dir",
+            "/kaggle/working",
+        ]
+    )
+    if cache_dir:
+        smoke_command.extend(["--cache-dir", cache_dir])
+    with progress_stage("BEiT-3 distributed save/restore smoke"):
+        run(smoke_command, cwd=REPO_ROOT)
+    return str(runtime_config_path)
 
 
 def find_dir(root, name):
@@ -837,6 +962,52 @@ def download_vqa_file(filename):
     return find_file(DOWNLOAD_ROOT, filename)
 
 
+def prepare_visual_genome_training_data(data_root):
+    from vqa_project.config import load_config
+
+    config_path = Path(CONFIG_PATH) if Path(CONFIG_PATH).is_absolute() else REPO_ROOT / CONFIG_PATH
+    config = load_config(config_path)
+    configured_manifest = config["data"].get("visual_genome_qa_path")
+    if not configured_manifest:
+        return
+    output_manifest = Path(configured_manifest)
+    if not output_manifest.is_absolute():
+        output_manifest = REPO_ROOT / output_manifest
+    if output_manifest.is_file():
+        payload = json.loads(output_manifest.read_text(encoding="utf-8"))
+        if payload.get("schema_version") != 1 or not payload.get("qas") or not payload.get("source_sha256"):
+            raise ValueError(f"Existing Visual Genome manifest is incomplete or unsupported: {output_manifest}")
+        progress(f"reusing screened Visual Genome manifest: {output_manifest}", stage="visual genome")
+        return
+    vg_root = DOWNLOAD_ROOT / "visual_genome"
+    vg_root.mkdir(parents=True, exist_ok=True)
+    source_paths = {}
+    for filename, url in VISUAL_GENOME_DOWNLOADS.items():
+        output = vg_root / filename
+        if not output.is_file() or output.stat().st_size == 0:
+            progress(f"preparing screened Visual Genome QA; source download: {filename}", stage="visual genome")
+            download_resumable_https(url, output)
+        source_paths[filename] = output
+    run(
+        [
+            "python",
+            "-u",
+            "scripts/prepare_visual_genome_qa.py",
+            "--vqa-root",
+            data_root,
+            "--image-data",
+            source_paths["image_data.json"],
+            "--question-answers",
+            source_paths["question_answers.json"],
+            "--answer-vocab",
+            ANSWER_VOCAB,
+            "--output",
+            output_manifest,
+        ],
+        cwd=REPO_ROOT,
+    )
+
+
 def link_path(source, target):
     if target.exists() or target.is_symlink():
         return
@@ -891,6 +1062,12 @@ def restore_resume_artifacts():
         shutil.copy2(find_file(resume_root, "answer_vocab.json"), ANSWER_VOCAB)
     except FileNotFoundError:
         pass
+    try:
+        vg_manifest = find_file(resume_root, "visual_genome_qa_train.json")
+    except FileNotFoundError:
+        pass
+    else:
+        shutil.copy2(vg_manifest, WORK_ROOT / "visual_genome_qa_train.json")
 
     restored_latest = CHECKPOINT_DIR / source_latest.name
     progress(f"restored resume checkpoint from {source_latest} to {restored_latest}")
@@ -1158,6 +1335,9 @@ def archive_artifacts():
     shutil.copytree(CHECKPOINT_DIR, export_run)
     if ANSWER_VOCAB.is_file():
         shutil.copy2(ANSWER_VOCAB, EXPORT_ROOT / "answer_vocab.json")
+    vg_manifest = WORK_ROOT / "visual_genome_qa_train.json"
+    if vg_manifest.is_file():
+        shutil.copy2(vg_manifest, EXPORT_ROOT / vg_manifest.name)
     archive = ARCHIVE_PATH.with_suffix(".tar.gz")
     archive.unlink(missing_ok=True)
     shutil.make_archive(str(ARCHIVE_PATH), "gztar", root_dir=EXPORT_ROOT)
@@ -1170,6 +1350,7 @@ def main():
     initialize_progress_logging()
     os.environ["PYTHONUNBUFFERED"] = "1"
     os.environ["PYTHONFAULTHANDLER"] = "1"
+    os.environ.setdefault("VQA_STOP_AT_UNIX", str(time.time() + 11 * 60 * 60))
     progress(
         f"run={RUN_NAME}; config={CONFIG_PATH}; git_ref={GIT_REF}; "
         f"data_source={RAW_DATA_ROOT}; resume_source={RESUME_ROOT}"
@@ -1215,6 +1396,10 @@ def main():
     with progress_stage("checkpoint restore"):
         latest_checkpoint = restore_resume_artifacts()
 
+    training_config_path = CONFIG_PATH
+    if "beit3" in CONFIG_PATH.lower():
+        training_config_path = prepare_beit3_runtime(train_launcher)
+
     with progress_stage("dataset preparation"):
         data_root = normalize_vqa_data()
 
@@ -1233,10 +1418,57 @@ def main():
             cwd=REPO_ROOT,
         )
 
+    with progress_stage("Visual Genome train-only screening"):
+        prepare_visual_genome_training_data(data_root)
+
+    if "beit3" in CONFIG_PATH.lower():
+        with progress_stage("BEiT-3 data-loader training smoke"):
+            with tempfile.TemporaryDirectory(prefix="beit3-data-smoke-") as smoke_dir:
+                run(
+                    train_launcher
+                    + [
+                        "--config",
+                        training_config_path,
+                        "--device",
+                        "cuda",
+                        "--data-root",
+                        data_root,
+                        "--answer-vocab-path",
+                        ANSWER_VOCAB,
+                        "--checkpoint-dir",
+                        Path(smoke_dir) / "checkpoint",
+                        "--max-train-samples",
+                        "128",
+                        "--max-val-samples",
+                        "128",
+                        "--epochs",
+                        "1",
+                        "--no-wandb",
+                    ],
+                    cwd=REPO_ROOT,
+                )
+        with progress_stage("BEiT-3 runtime estimate"):
+            run(
+                [
+                    "python",
+                    "-u",
+                    "scripts/estimate_beit3_runtime.py",
+                    "--config",
+                    training_config_path,
+                    "--benchmark",
+                    CHECKPOINT_DIR / "beit3_batch_benchmark.json",
+                    "--data-root",
+                    data_root,
+                    "--output",
+                    CHECKPOINT_DIR / "beit3_capacity_estimate.json",
+                ],
+                cwd=REPO_ROOT,
+            )
+
     with progress_stage("distributed training"):
         train_command = train_launcher + [
             "--config",
-            CONFIG_PATH,
+            training_config_path,
             "--device",
             "cuda",
             "--data-root",
@@ -1258,6 +1490,18 @@ def main():
         else:
             run(train_command, cwd=REPO_ROOT)
 
+        pause_marker = CHECKPOINT_DIR / "training_paused.json"
+        if pause_marker.is_file():
+            with progress_stage("paused checkpoint packaging"):
+                archive_artifacts()
+            progress(
+                f"training paused at a resumable optimizer boundary; upload {ARCHIVE_PATH.with_suffix('.tar.gz')} "
+                "as the next run's resume dataset",
+                state="paused",
+                stage="training paused",
+            )
+            return
+
     with progress_stage("prediction and official evaluation"):
         run(
             [
@@ -1265,7 +1509,7 @@ def main():
                 "-u",
                 "evaluate.py",
                 "--config",
-                CONFIG_PATH,
+                training_config_path,
                 "--checkpoint",
                 CHECKPOINT_DIR / "best.pt",
                 "--device",
