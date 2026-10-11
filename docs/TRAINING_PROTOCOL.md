@@ -129,6 +129,10 @@ Version 37 validated the AMP fix: the dual-T4 capacity benchmark selected a per-
 
 Version 37 已验证 AMP 修复有效：双 T4 容量 benchmark 选择每卡 batch size 8，两个 rank 均完成两次成功的 optimizer update。随后 checkpoint smoke 比较器直接对位于 CPU 和 CUDA 的 optimizer state 张量调用 `torch.equal`，导致运行失败。现已修复为先将张量统一到 CPU，再核对形状、dtype 和精确值。Version 37 未开始数据准备或全量训练；仍须重新通过硬件门槛。
 
+Version 38 passed the cross-device optimizer-state comparison, then exposed an omitted `scaler` argument in the smoke checkpoint save call. As a result, the checkpoint contained no AMP scaler state and the restore assertion correctly failed. The smoke now saves the scaler and explicitly rejects checkpoints without scaler state. Version 38 also stopped before dataset preparation and full training.
+
+Version 38 已通过跨设备 optimizer state 比较，随后发现 smoke 保存 checkpoint 时漏传 `scaler` 参数，因此 checkpoint 未包含 AMP scaler 状态，恢复断言按预期失败。现已补充保存 scaler，并增加 checkpoint 必须包含该状态的检查。Version 38 同样在数据准备和全量训练前停止。
+
 ### Training and resume / 训练与续训
 
 The initial recipe uses generic BEiT-3 Base pretraining, a fresh VQA head, 480 px official preprocessing, full-backbone fine-tuning, Top-5000 training-only vocabulary, AdamW (backbone LR `3e-5`, head LR `6e-4`, betas `(0.9, 0.98)`, weight decay `0.01`), gradient clipping `1.0`, 10% warmup followed by cosine decay, AMP, activation checkpointing, and up to 10 epochs. Random crop, flip, and color jitter remain disabled. From epoch 4, stop after three consecutive epochs without at least `0.1` official-score improvement.

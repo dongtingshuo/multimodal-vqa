@@ -8,6 +8,8 @@
 - 修复 BEiT-3 AMP 预检计步：GradScaler 跳过的更新不再推进 optimizer-step 状态或 scheduler；Kaggle benchmark 和 smoke 必须实际完成 AdamW 更新，才接受测量结果或 checkpoint 往返验证。
 - Fix the BEiT-3 distributed checkpoint smoke comparator to verify tensor state across CPU/CUDA devices without device-mismatch errors.
 - 修复 BEiT-3 分布式 checkpoint smoke 比较器，使其可跨 CPU/CUDA 设备核验张量状态，避免设备不一致异常。
+- Include and verify AMP GradScaler state in the BEiT-3 distributed smoke checkpoint round-trip.
+- 在 BEiT-3 分布式 smoke checkpoint 往返测试中保存并核验 AMP GradScaler 状态。
 - Restrict download helpers to HTTPS and add traversal/link checks for Kaggle zip and AutoDL tar extraction.
 - Align the package build backend with SPDX license metadata support.
 - Add conservative dependency-update automation. An advisory audit identified the legacy Gradio/Starlette web stack, but its coupled major-version migration is deferred until checkpoint, demo, and training-runtime compatibility are tested together.

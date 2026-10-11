@@ -188,6 +188,7 @@ def main() -> None:
             metrics={"loss": last_loss},
             config={"model": model_cfg},
             answer_vocab=AnswerVocab([str(index) for index in range(args.answer_vocab_size)], normalization="vqa_v2"),
+            scaler=scaler,
             training_state={
                 "global_step": successful_updates,
                 "epoch_complete": False,
@@ -201,6 +202,8 @@ def main() -> None:
     distributed.barrier()
 
     checkpoint = load_checkpoint(checkpoint_path, device)
+    if checkpoint.get("scaler_state") is None:
+        raise RuntimeError("Smoke checkpoint did not save AMP scaler state.")
     expected_bias = model.head[-1].bias.detach().clone()
     model.head[-1].bias.data.add_(1.0)
     next(iter(optimizer.state.values()))["exp_avg"].add_(1.0)
