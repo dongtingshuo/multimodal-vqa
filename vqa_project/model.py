@@ -668,5 +668,15 @@ def build_model(
         available = ", ".join(sorted(MODEL_REGISTRY))
         raise ValueError(f"Unknown model name '{model_name}'. Available models: {available}") from exc
     if model_name == "beit3_base":
+        # Shared defaults for text/CNN models do not apply to the BEiT-3 architecture.
+        for key in (
+            "text_model_name",
+            "hidden_dim",
+            "num_attention_heads",
+            "dropout",
+            "freeze_backbones",
+            "pretrained_cnn",
+        ):
+            model_cfg.pop(key, None)
         model_cfg["load_pretrained"] = load_pretrained
     return model_class(answer_vocab_size=int(resolved_answer_vocab_size), **model_cfg)
