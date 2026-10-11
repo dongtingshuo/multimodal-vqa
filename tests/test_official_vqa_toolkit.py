@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import ast
+
 import pytest
 
 from scripts.prepare_official_vqa_toolkit import convert_source
