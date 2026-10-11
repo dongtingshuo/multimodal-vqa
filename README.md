@@ -13,12 +13,17 @@ A research-oriented multimodal Visual Question Answering system with data prepar
 | Track | Status | Hard accuracy | Internal VQA | Official VQA val (%) |
 | --- | --- | ---: | ---: | ---: |
 | ViLT seed-42 checkpoint (`v0.3.0`) | Recommended engineering release / 推荐工程版本 | **0.6126** | **0.7101** | **68.42** |
+| ViLT T4x2 continuation (Kaggle V34) | Evaluated experiment; not promoted / 已评测实验；未晋升 | 0.6084 | 0.7067 | 68.08 |
 | Staged cross-attention checkpoint (`v0.2.0`) | Archived comparison release / 历史对照版本 | 0.5239 | 0.6233 | Not evaluated |
 | Legacy checkpoint (`v0.1.0`) | Archived release / 历史发布 | 0.4775 | Not recorded | Not evaluated |
 
 The ViLT run completed through the configured early-stopping rule at epoch 7, selected epoch 5, and exported predictions for all 214,354 validation questions. The official VQA Evaluation Toolkit reports `68.42` on the VQA v2 validation annotations. This is an official-protocol local validation result, not a test-dev/test-standard leaderboard submission.
 
 ViLT 任务已按配置在 epoch 7 触发早停，最佳权重来自 epoch 5，并已导出全部 214,354 条验证预测。官方 VQA Evaluation Toolkit 在 VQA v2 验证标注上的得分为 `68.42`。这是采用官方协议的本地验证结果，不是 test-dev/test-standard leaderboard 提交成绩。
+
+Kaggle V34 continued the same ViLT run from epoch 4 and stopped after epoch 6 without improving its selected validation metrics. Its official VQA v2 validation score is `68.08`, 0.34 percentage points below the recommended checkpoint, so it was not promoted and does not replace the `v0.3.0` checkpoint. See the [full experiment report](docs/EXPERIMENT_REPORT.md) and [complete official metrics](docs/evaluation/kaggle-v34-official-vqa-metrics.json).
+
+Kaggle V34 从 epoch 4 继续同一 ViLT 实验，并在 epoch 6 早停，验证指标未超过已有最佳值。其官方 VQA v2 验证分数为 `68.08`，比当前推荐 checkpoint 低 0.34 个百分点，因此不予晋升，也不会替换 `v0.3.0` 权重。详见[完整实验报告](docs/EXPERIMENT_REPORT.md)和[官方评测分项指标](docs/evaluation/kaggle-v34-official-vqa-metrics.json)。
 
 ## Core Capabilities / 核心能力
 
