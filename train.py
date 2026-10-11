@@ -45,6 +45,7 @@ from vqa_project.training import (
     compute_vqa_data_fingerprint,
     configure_finetune_stage,
     count_parameters,
+    ddp_static_graph_enabled,
     stage_for_epoch,
     step_scheduler,
     validate_resume_config,
@@ -473,6 +474,7 @@ def run_training(
             device_ids=[local_rank],
             output_device=local_rank,
             find_unused_parameters=bool(needs_unused_parameter_tracking),
+            static_graph=ddp_static_graph_enabled(model_cfg, train_cfg),
         )
     else:
         training_model = model

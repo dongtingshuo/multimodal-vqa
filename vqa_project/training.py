@@ -94,6 +94,15 @@ def stage_for_epoch(model_cfg: dict[str, Any], train_cfg: dict[str, Any], epoch:
     return "frozen" if epoch <= int(train_cfg.get("freeze_epochs", 2)) else "partial"
 
 
+def ddp_static_graph_enabled(model_cfg: dict[str, Any], train_cfg: dict[str, Any]) -> bool:
+    return (
+        model_cfg.get("name") == "beit3_base"
+        and bool(model_cfg.get("gradient_checkpointing", True))
+        and train_cfg.get("fixed_finetune_stage") == "full"
+        and not train_cfg.get("staged_finetuning", False)
+    )
+
+
 def configure_finetune_stage(model: nn.Module, stage: str, train_cfg: dict[str, Any]) -> None:
     configure = getattr(model, "set_finetune_stage", None)
     if callable(configure):

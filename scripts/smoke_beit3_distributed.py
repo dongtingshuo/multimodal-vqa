@@ -25,7 +25,7 @@ from vqa_project.engine import (
     vqa_bce_loss,
 )
 from vqa_project.model import build_model
-from vqa_project.training import build_optimizer
+from vqa_project.training import build_optimizer, ddp_static_graph_enabled
 
 
 def _nested_equal(left, right) -> bool:
@@ -101,7 +101,12 @@ def main() -> None:
     for name, parameter in model.named_parameters():
         if name in permanently_frozen:
             parameter.requires_grad_(False)
-    ddp_model = DistributedDataParallel(model, device_ids=[local_rank], output_device=local_rank)
+    ddp_model = DistributedDataParallel(
+        model,
+        device_ids=[local_rank],
+        output_device=local_rank,
+        static_graph=ddp_static_graph_enabled(model_cfg, {"fixed_finetune_stage": "full"}),
+    )
     optimizer = build_optimizer(
         model,
         {
