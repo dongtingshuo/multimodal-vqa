@@ -379,6 +379,7 @@ def install_training_dependencies():
             TRANSFORMERS_SPEC,
             "Pillow>=10.0",
             "PyYAML>=6.0",
+            "fissix>=24.4.24",
             "tqdm>=4.66",
             "matplotlib>=3.8",
         ],

@@ -124,6 +124,7 @@ strong 模型实验：第 12 版暴露续训问题，第 13 版完成训练，�
 | Staged `cross_attention` | 12 | 0.5239 | 0.6233 | Not evaluated | Archived comparison release |
 | `strong_cross_attention` | 22 | 0.4967 | 0.5955 | Not evaluated | Not promoted |
 | ViLT seed 42 | 5 | **0.6126** | **0.7101** | **68.42** | Recommended engineering checkpoint |
+| ViLT T4x2 continuation (Kaggle V34) | 4 | 0.6084 | 0.7067 | Pending | Not promoted; no validation gain |
 
 The ViLT run completed through epoch 7, stopped under the configured early-stopping rule, and
 exported one prediction for every validation question. Official repository commit `a013f004`
@@ -138,6 +139,7 @@ commit `a013f004` 在公开 VQA v2 验证标注上对完整预测评测，overal
 | Staged `cross_attention` | `configs/kaggle_finetune.yaml` | `e26ba287` | `checkpoints/kaggle_finetune_best.pt` |
 | `strong_cross_attention` | `configs/kaggle_strong.yaml` | `36aa22f` (epochs 1-12), `794b037` (resumed epochs 13-24) | `checkpoints/kaggle_strong_best.pt` |
 | ViLT seed 42 | `configs/kaggle_vilt.yaml`, then `autodl/configs/vilt_resume_4090d.yaml` | `003d7df` continuation workflow; checkpoint metadata lacks source commit | `checkpoints/best.pt` |
+| ViLT T4x2 continuation (Kaggle V34) | `configs/kaggle_vilt_last6_t4x2.yaml` | `37d4d50` | Selected epoch-4 checkpoint restored from the verified Version 33 resume artifact |
 
 The strong run spans two training commits because a CUDA RNG restoration compatibility fix was
 required before resuming. The fix changed checkpoint restoration, not the model, loss, data,
@@ -400,6 +402,29 @@ test-dev/test-standard leaderboard submission.
 提高 `0.0868`，且官方验证协议得分为 `68.42`，因此发布为推荐工程 checkpoint。该结果不是
 test-dev/test-standard leaderboard 提交成绩。
 
+## Kaggle ViLT Continuation / Kaggle ViLT 续训（Version 34）
+
+Version 34 continued the same T4x2 ViLT experiment from the verified Version 33 epoch-4 checkpoint; it is not an independent run. Epochs 5 and 6 completed, but neither exceeded the inherited epoch-4 VQA score. The selected weights therefore remain the Version 33 epoch-4 checkpoint.
+
+Version 34 从已验证的 Version 33 epoch 4 checkpoint 继续运行双 T4 ViLT 实验，并非独立训练。epoch 5 和 6 均未超过继承的 epoch 4 VQA score，因此最终最佳权重仍是 Version 33 的 epoch 4 checkpoint。
+
+| Epoch | Train VQA | Validation loss | Hard accuracy | Internal VQA | Top-5 VQA | Selection |
+| ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| 4 (restored) | 0.7902 | 3.3799 | 0.6084 | 0.7067 | 0.8897 | inherited best |
+| 5 | 0.8267 | 3.4905 | 0.6083 | 0.7062 | 0.8897 | no |
+| 6 | 0.8573 | 3.6152 | 0.6079 | 0.7057 | 0.8883 | early stop |
+
+Training VQA continued to rise while validation loss rose and validation VQA fell. This is evidence of overfitting under this schedule; do not resume the same run unchanged. The configured patience stopped training after epoch 6. The run summary records 50,351 seconds (about 14.0 hours) of cumulative training across the resumed experiment.
+
+训练 VQA 持续上升，但验证 loss 同时上升、验证 VQA 下降，说明当前训练方案已出现过拟合；不应原样继续续训。配置的 patience 在 epoch 6 触发早停。运行摘要记录该续训实验累计训练 50,351 秒，约 14.0 小时。
+
+The internal evaluator scored 209,608 validation examples, and the export contains 214,354 predictions. The official VQA score is **pending**: the Kaggle run failed while converting the upstream Python 2 toolkit because Python 3.12 no longer provides `lib2to3`. This internal VQA score must not be presented as an official benchmark score.
+
+内部 evaluator 对 209,608 条验证样本计分，预测导出包含 214,354 条结果。官方 VQA 分数仍为**待评测**：Kaggle 运行在转换上游 Python 2 toolkit 时失败，因为 Python 3.12 已不再提供 `lib2to3`。不得将内部 VQA score 写成官方 benchmark 分数。
+
+The downloaded Version 34 result directory contained a zero-byte `best.pt`, although the Kaggle log confirms that evaluation loaded the checkpoint and completed. The verified Version 33 epoch-4 checkpoint has matching configuration and exact best metrics; it is the recoverable selected checkpoint. The Version 34 `latest.pt` is an epoch-6 continuation state and must not be substituted as the best model. Version 34 is not promoted because it did not improve the current recommended checkpoint; its official score remains pending.
+
+下载的 Version 34 结果目录中 `best.pt` 为 0 字节，但 Kaggle 日志确认评测阶段成功加载 checkpoint 并完成内部验证。已验证的 Version 33 epoch 4 checkpoint 配置相同且最佳指标完全一致，可作为可恢复的最佳权重。Version 34 的 `latest.pt` 是 epoch 6 的续训状态，不能替代最佳模型。由于 Version 34 未超过当前推荐 checkpoint，且官方分数仍待评测，因此不予晋升。
 ## Current Limitations / 当前限制
 
 The full answer-vocabulary coverage and question-type error profile for the released ViLT checkpoint are documented in [VQA validation diagnostics / VQA 验证集诊断](evaluation/v0.3.0-vilt-diagnostics.md). The analysis confirms that overall vocabulary coverage is high, while performance is notably weaker for numeric, name, time, and explanatory questions.
