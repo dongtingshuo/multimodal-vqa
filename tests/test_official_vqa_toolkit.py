@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import ast
 
+import pytest
+
 from scripts.prepare_official_vqa_toolkit import convert_source
 
 
@@ -23,3 +25,16 @@ def test_convert_source_repairs_known_official_indentation() -> None:
     ast.parse(converted)
     assert "        imgToQA = {}" in converted
     assert "        self.qa = imgToQA" in converted
+
+
+def test_conversion_reports_missing_refactoring_dependency(monkeypatch) -> None:
+    original_import = __import__
+
+    def import_without_refactor(name, *args, **kwargs):
+        if name == "fissix.refactor" or name.startswith("lib2to3"):
+            raise ImportError("simulated missing refactoring dependency")
+        return original_import(name, *args, **kwargs)
+
+    monkeypatch.setattr("builtins.__import__", import_without_refactor)
+    with pytest.raises(RuntimeError, match="fissix"):
+        convert_source("print 'ready'\\n", "demo.py")

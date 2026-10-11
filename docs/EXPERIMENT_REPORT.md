@@ -124,6 +124,7 @@ strong 模型实验：第 12 版暴露续训问题，第 13 版完成训练，�
 | Staged `cross_attention` | 12 | 0.5239 | 0.6233 | Not evaluated | Archived comparison release |
 | `strong_cross_attention` | 22 | 0.4967 | 0.5955 | Not evaluated | Not promoted |
 | ViLT seed 42 | 5 | **0.6126** | **0.7101** | **68.42** | Recommended engineering checkpoint |
+| ViLT T4x2 continuation (Kaggle V34) | 4 | 0.6084 | 0.7067 | 68.08 | Not promoted; 0.34 points below recommended |
 
 The ViLT run completed through epoch 7, stopped under the configured early-stopping rule, and
 exported one prediction for every validation question. Official repository commit `a013f004`
@@ -138,6 +139,7 @@ commit `a013f004` 在公开 VQA v2 验证标注上对完整预测评测，overal
 | Staged `cross_attention` | `configs/kaggle_finetune.yaml` | `e26ba287` | `checkpoints/kaggle_finetune_best.pt` |
 | `strong_cross_attention` | `configs/kaggle_strong.yaml` | `36aa22f` (epochs 1-12), `794b037` (resumed epochs 13-24) | `checkpoints/kaggle_strong_best.pt` |
 | ViLT seed 42 | `configs/kaggle_vilt.yaml`, then `autodl/configs/vilt_resume_4090d.yaml` | `003d7df` continuation workflow; checkpoint metadata lacks source commit | `checkpoints/best.pt` |
+| ViLT T4x2 continuation (Kaggle V34) | `configs/kaggle_vilt_last6_t4x2.yaml` | `37d4d50` | Selected epoch-4 checkpoint restored from the verified Version 33 resume artifact |
 
 The strong run spans two training commits because a CUDA RNG restoration compatibility fix was
 required before resuming. The fix changed checkpoint restoration, not the model, loss, data,
@@ -400,6 +402,33 @@ test-dev/test-standard leaderboard submission.
 提高 `0.0868`，且官方验证协议得分为 `68.42`，因此发布为推荐工程 checkpoint。该结果不是
 test-dev/test-standard leaderboard 提交成绩。
 
+## Kaggle ViLT Continuation / Kaggle ViLT 续训（Version 34）
+
+Version 34 continued the same T4x2 ViLT experiment from the verified Version 33 epoch-4 checkpoint; it is not an independent run. Epochs 5 and 6 completed, but neither exceeded the inherited epoch-4 VQA score. The selected weights therefore remain the Version 33 epoch-4 checkpoint.
+
+Version 34 从已验证的 Version 33 epoch 4 checkpoint 继续运行双 T4 ViLT 实验，并非独立训练。epoch 5 和 6 均未超过继承的 epoch 4 VQA score，因此最终最佳权重仍是 Version 33 的 epoch 4 checkpoint。
+
+| Epoch | Train VQA | Validation loss | Hard accuracy | Internal VQA | Top-5 VQA | Selection |
+| ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| 4 (restored) | 0.7902 | 3.3799 | 0.6084 | 0.7067 | 0.8897 | inherited best |
+| 5 | 0.8267 | 3.4905 | 0.6083 | 0.7062 | 0.8897 | no |
+| 6 | 0.8573 | 3.6152 | 0.6079 | 0.7057 | 0.8883 | early stop |
+
+Training VQA continued to rise while validation loss rose and validation VQA fell. This is evidence of overfitting under this schedule; do not resume the same run unchanged. The configured patience stopped training after epoch 6. The run summary records 50,351 seconds (about 14.0 hours) of cumulative training across the resumed experiment.
+
+训练 VQA 持续上升，但验证 loss 同时上升、验证 VQA 下降，说明当前训练方案已出现过拟合；不应原样继续续训。配置的 patience 在 epoch 6 触发早停。运行摘要记录该续训实验累计训练 50,351 秒，约 14.0 小时。
+
+The internal evaluator scored 209,608 validation examples; the prediction export contains all 214,354 validation questions. The upstream [VQA evaluation toolkit](https://github.com/GT-Vision-Lab/VQA) was converted with Fissix and run against the complete public VQA v2 validation annotations. The official evaluator returned **68.08 overall** on two runs. Question IDs matched exactly across questions, annotations, and predictions. Per-answer-type scores were 60.19 (`other`), 85.35 (`yes/no`), and 48.22 (`number`); the complete question-type breakdown is in [the metrics artifact](evaluation/kaggle-v34-official-vqa-metrics.json).
+
+内部 evaluator 对 209,608 条验证样本计分；预测导出覆盖完整的 214,354 条验证问题。我们使用 Fissix 转换上游 [VQA 官方评测工具](https://github.com/GT-Vision-Lab/VQA)，并在完整公开 VQA v2 验证标注上运行，重复两次均得到 **68.08 overall**。questions、annotations 与 predictions 的 question ID 完全一致。按答案类型的分数为 `other` 60.19、`yes/no` 85.35、`number` 48.22；完整问题类型分项见[指标文件](evaluation/kaggle-v34-official-vqa-metrics.json)。
+
+The result is 0.34 percentage points below the recommended ViLT checkpoint's official validation score of 68.42. Its internal accuracy (0.6084), VQA score (0.7067), and top-5 VQA score (0.8897) are also below the recommended checkpoint (0.6126, 0.7101, and 0.8908). Therefore, Version 34 is **not promoted**, and the existing recommended checkpoint remains unchanged. This is an official validation-set evaluation, not a test-dev/test-standard leaderboard submission.
+
+该结果比当前推荐 ViLT checkpoint 的官方验证分数 68.42 低 0.34 个百分点。其内部 accuracy（0.6084）、VQA score（0.7067）和 top-5 VQA score（0.8897）也低于推荐 checkpoint（分别为 0.6126、0.7101 和 0.8908）。因此 Version 34 **不予晋升**，现有推荐 checkpoint 保持不变。该结果是官方验证集评测，不是 test-dev/test-standard 榜单提交成绩。
+
+The downloaded Version 34 result directory contained a zero-byte `best.pt`. The selected weights were recovered from the verified Version 33 epoch-4 checkpoint, which matches the Version 34 configuration and selected metrics; its SHA-256 is `947551915da46f6225f2574c217728b8125491608fa55a54aabd8625fd5561c5`. The V34 epoch-6 `latest.pt` is a continuation state and is not the selected best checkpoint. Evaluation provenance: questions SHA-256 `f34d9c9909dea76700d361baddd63dd47b4494945097459b542d9fe840244811`; annotations SHA-256 `0564650e712b34c246e4ad142894692bf2e45dee8e9cc6ebb2cedbe85731c4bf`; predictions SHA-256 `febdf25cc960dd509e823af025d367020ddfcc328ab74dacb38c4a67ccf886b1`.
+
+下载的 Version 34 结果目录中 `best.pt` 为 0 字节。最终选用已验证的 Version 33 epoch 4 checkpoint 恢复权重，其配置和 Version 34 选中指标一致；SHA-256 为 `947551915da46f6225f2574c217728b8125491608fa55a54aabd8625fd5561c5`。V34 epoch 6 的 `latest.pt` 是续训状态，并非选中的最佳 checkpoint。评测数据指纹：questions SHA-256 `f34d9c9909dea76700d361baddd63dd47b4494945097459b542d9fe840244811`；annotations SHA-256 `0564650e712b34c246e4ad142894692bf2e45dee8e9cc6ebb2cedbe85731c4bf`；predictions SHA-256 `febdf25cc960dd509e823af025d367020ddfcc328ab74dacb38c4a67ccf886b1`。
 ## Current Limitations / 当前限制
 
 The full answer-vocabulary coverage and question-type error profile for the released ViLT checkpoint are documented in [VQA validation diagnostics / VQA 验证集诊断](evaluation/v0.3.0-vilt-diagnostics.md). The analysis confirms that overall vocabulary coverage is high, while performance is notably weaker for numeric, name, time, and explanatory questions.

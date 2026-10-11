@@ -28,14 +28,30 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def _get_refactoring_tool():
+    try:
+        from fissix.refactor import RefactoringTool, get_fixers_from_package
+    except ImportError:
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", PendingDeprecationWarning)
+            try:
+                from lib2to3.refactor import RefactoringTool, get_fixers_from_package
+            except ImportError as exc:
+                raise RuntimeError(
+                    "Install the 'fissix' dependency to convert the official VQA toolkit "
+                    "on this Python version."
+                ) from exc
+        fixer_package = "lib2to3.fixes"
+    else:
+        fixer_package = "fissix.fixes"
+
+    return RefactoringTool(get_fixers_from_package(fixer_package))
+
+
 def _run_2to3(source: str, filename: str) -> str:
     if "print '" not in source and 'print "' not in source:
         return source
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore", PendingDeprecationWarning)
-        from lib2to3.refactor import RefactoringTool, get_fixers_from_package
-
-        tool = RefactoringTool(get_fixers_from_package("lib2to3.fixes"))
+    tool = _get_refactoring_tool()
     return str(tool.refactor_string(source, filename))
 
 
