@@ -132,6 +132,17 @@ def test_kaggle_runner_defaults_to_beit3_a() -> None:
     assert run_kaggle_finetune.DEFAULT_RUN_NAME == "beit3-vqa-a-seed42-t4x2"
 
 
+def test_runner_adds_checked_out_repository_to_import_path(tmp_path: Path, monkeypatch) -> None:
+    repo_root = tmp_path / "checkout"
+    repo_root.mkdir()
+    monkeypatch.setattr(run_kaggle_finetune, "REPO_ROOT", repo_root)
+    monkeypatch.setattr(sys, "path", [entry for entry in sys.path if entry != str(repo_root)])
+
+    run_kaggle_finetune.ensure_repo_import_path()
+
+    assert sys.path[0] == str(repo_root.resolve())
+
+
 def test_beit3_preflight_benchmarks_generates_config_and_smokes_then_reuses(tmp_path: Path, monkeypatch) -> None:
     from scripts.prepare_beit3_runtime_config import prepare_runtime_config
 

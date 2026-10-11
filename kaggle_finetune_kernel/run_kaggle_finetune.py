@@ -429,10 +429,17 @@ def _launcher_world_size(training_command):
     return 1
 
 
+def ensure_repo_import_path():
+    repo_root = str(REPO_ROOT.resolve())
+    if repo_root not in sys.path:
+        sys.path.insert(0, repo_root)
+
+
 def prepare_beit3_runtime(training_command):
     if "beit3" not in CONFIG_PATH.lower():
         return CONFIG_PATH
 
+    ensure_repo_import_path()
     from vqa_project.config import load_config
 
     config = load_config(Path(CONFIG_PATH) if Path(CONFIG_PATH).is_absolute() else REPO_ROOT / CONFIG_PATH)
@@ -963,6 +970,7 @@ def download_vqa_file(filename):
 
 
 def prepare_visual_genome_training_data(data_root):
+    ensure_repo_import_path()
     from vqa_project.config import load_config
 
     config_path = Path(CONFIG_PATH) if Path(CONFIG_PATH).is_absolute() else REPO_ROOT / CONFIG_PATH
@@ -1386,6 +1394,7 @@ def main():
         run(["git", "fetch", "--all", "--tags"], cwd=REPO_ROOT)
         run(["git", "checkout", GIT_REF], cwd=REPO_ROOT)
         run(["git", "rev-parse", "HEAD"], cwd=REPO_ROOT)
+        ensure_repo_import_path()
 
     with progress_stage("runtime and dependencies"):
         install_training_dependencies()
