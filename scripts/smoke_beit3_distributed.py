@@ -30,7 +30,12 @@ from vqa_project.training import build_optimizer
 
 def _nested_equal(left, right) -> bool:
     if torch.is_tensor(left):
-        return torch.is_tensor(right) and torch.equal(left, right)
+        return (
+            torch.is_tensor(right)
+            and left.shape == right.shape
+            and left.dtype == right.dtype
+            and torch.equal(left.detach().cpu(), right.detach().cpu())
+        )
     if isinstance(left, dict):
         return isinstance(right, dict) and left.keys() == right.keys() and all(
             _nested_equal(left[key], right[key]) for key in left

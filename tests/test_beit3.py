@@ -10,9 +10,19 @@ from torch import nn
 from torchvision import transforms
 
 from scripts.create_beit3_replication_config import create_replication_config
+from scripts.smoke_beit3_distributed import _nested_equal
 from vqa_project import beit3
 from vqa_project.data import build_image_transform
 from vqa_project.model import build_model
+
+
+def test_nested_equal_compares_tensor_states_independent_of_device() -> None:
+    cpu_tensor = torch.tensor([1.0, 2.0])
+    other_tensor = cpu_tensor.cuda() if torch.cuda.is_available() else cpu_tensor.clone()
+
+    assert _nested_equal({"state": [cpu_tensor]}, {"state": [other_tensor]})
+    assert not _nested_equal(cpu_tensor, torch.tensor([1.0, 3.0]))
+    assert not _nested_equal(cpu_tensor, torch.tensor([1.0, 2.0], dtype=torch.float64))
 
 
 @pytest.mark.parametrize(

@@ -125,6 +125,10 @@ Kaggle Version 36 confirmed both T4 devices and completed the benchmark command,
 
 Kaggle Version 36 确认检测到两张 T4 并执行了 benchmark 命令，但分布式 smoke 未进入 checkpoint 往返验证：FP16 默认 loss scale 导致两次 optimizer update 都被跳过，AdamW 状态因而尚未初始化。runner 现以可配置的 `1024` loss scale 启动 BEiT-3；smoke/benchmark 会在有限重试内确认真实 optimizer update 成功，并检查真实数据 smoke 的 checkpoint 至少包含一次成功更新。AMP 跳过的更新不会推进 optimizer-step 游标或按 update 调度的 scheduler。因此 Version 36 属于预检失败，不是训练结果；没有真实 optimizer update 的 benchmark 数值不予采纳。
 
+Version 37 validated the AMP fix: the dual-T4 capacity benchmark selected a per-GPU batch size of 8, and both ranks completed two successful optimizer updates. The run then failed in the checkpoint smoke comparator, which called `torch.equal` on CPU and CUDA optimizer-state tensors. The comparator now normalizes tensors to CPU and checks shape, dtype, and exact values. No dataset preparation or full training started in Version 37; the hardware gate must be rerun.
+
+Version 37 已验证 AMP 修复有效：双 T4 容量 benchmark 选择每卡 batch size 8，两个 rank 均完成两次成功的 optimizer update。随后 checkpoint smoke 比较器直接对位于 CPU 和 CUDA 的 optimizer state 张量调用 `torch.equal`，导致运行失败。现已修复为先将张量统一到 CPU，再核对形状、dtype 和精确值。Version 37 未开始数据准备或全量训练；仍须重新通过硬件门槛。
+
 ### Training and resume / 训练与续训
 
 The initial recipe uses generic BEiT-3 Base pretraining, a fresh VQA head, 480 px official preprocessing, full-backbone fine-tuning, Top-5000 training-only vocabulary, AdamW (backbone LR `3e-5`, head LR `6e-4`, betas `(0.9, 0.98)`, weight decay `0.01`), gradient clipping `1.0`, 10% warmup followed by cosine decay, AMP, activation checkpointing, and up to 10 epochs. Random crop, flip, and color jitter remain disabled. From epoch 4, stop after three consecutive epochs without at least `0.1` official-score improvement.
