@@ -42,6 +42,13 @@ def _nested_equal(left, right) -> bool:
     return left == right
 
 
+def _optimizer_step_count(optimizer: torch.optim.Optimizer) -> int:
+    return max(
+        (int(state["step"].item()) for state in optimizer.state.values() if "step" in state),
+        default=0,
+    )
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run a two-GPU BEiT-3 forward/backward/checkpoint smoke test.")
     parser.add_argument("--image-size", type=int, default=480)
@@ -51,6 +58,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--cache-dir", default=None)
     parser.add_argument("--output-dir", default="/kaggle/working")
     parser.add_argument("--expected-gpus", type=int, default=2)
+    parser.add_argument("--amp-init-scale", type=float, default=1024.0)
     return parser.parse_args()
 
 
@@ -99,11 +107,17 @@ def main() -> None:
             "weight_decay": 0.01,
         },
     )
-    scaler = torch.amp.GradScaler("cuda", enabled=True)
+    scaler = torch.amp.GradScaler("cuda", init_scale=args.amp_init_scale, enabled=True)
     data_generator = torch.Generator().manual_seed(1000 + rank)
     parameter_count = sum(parameter.numel() for parameter in model.parameters())
 
-    for step in range(2):
+    successful_updates = 0
+    attempts = 0
+    last_loss = None
+    for attempt in range(12):
+        if successful_updates >= 2:
+            break
+        attempts = attempt + 1
         images = torch.rand(args.batch_size_per_gpu, 3, args.image_size, args.image_size, device=device)
         input_ids = torch.randint(
             3,
@@ -120,15 +134,27 @@ def main() -> None:
             logits = ddp_model(images, input_ids, attention_mask)
             loss = vqa_bce_loss(logits, targets)
         if not torch.isfinite(loss):
-            raise RuntimeError(f"Rank {rank} produced a non-finite loss at update {step + 1}.")
+            raise RuntimeError(f"Rank {rank} produced a non-finite loss at attempt {attempts}.")
+        previous_update = _optimizer_step_count(optimizer)
         scaler.scale(loss).backward()
         scaler.step(optimizer)
         scaler.update()
         torch.cuda.synchronize(device)
+        if _optimizer_step_count(optimizer) > previous_update:
+            successful_updates += 1
+            last_loss = float(loss.item())
+            status = f"update={successful_updates}/2"
+        else:
+            status = f"overflow-skipped scale={scaler.get_scale():g}"
         print(
-            f"rank={rank} gpu={torch.cuda.get_device_name(device)} update={step + 1}/2 "
+            f"rank={rank} gpu={torch.cuda.get_device_name(device)} attempt={attempts} {status} "
             f"loss={loss.item():.5f} parameters={parameter_count:,}",
             flush=True,
+        )
+    if successful_updates < 2:
+        raise RuntimeError(
+            f"AMP produced only {successful_updates}/2 successful optimizer updates in {attempts} attempts; "
+            f"current loss scale is {scaler.get_scale():g}."
         )
 
     probe = model.head[-1].weight[0, 0].detach().clone()
@@ -154,10 +180,15 @@ def main() -> None:
             model=model,
             optimizer=optimizer,
             epoch=1,
-            metrics={"loss": float(loss.item())},
+            metrics={"loss": last_loss},
             config={"model": model_cfg},
             answer_vocab=AnswerVocab([str(index) for index in range(args.answer_vocab_size)], normalization="vqa_v2"),
-            training_state={"global_step": 2, "epoch_complete": False, "batch_in_epoch": 2},
+            training_state={
+                "global_step": successful_updates,
+                "epoch_complete": False,
+                "batch_in_epoch": attempts,
+                "optimizer_steps_in_epoch": successful_updates,
+            },
             data_generator=data_generator,
             distributed_rng_states=rng_states,
         )

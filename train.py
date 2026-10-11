@@ -369,7 +369,11 @@ def run_training(
         len(train_loader) / accumulation_steps
     )
     scheduler = build_scheduler(optimizer, train_cfg, total_epochs, steps_per_epoch=optimizer_steps_per_epoch)
-    scaler = torch.amp.GradScaler("cuda", enabled=bool(train_cfg.get("use_amp", False) and device.type == "cuda"))
+    scaler = torch.amp.GradScaler(
+        "cuda",
+        init_scale=float(train_cfg.get("amp_init_scale", 65536.0)),
+        enabled=bool(train_cfg.get("use_amp", False) and device.type == "cuda"),
+    )
 
     runtime_cfg = config.get("runtime", {})
     run_name = runtime_cfg.get("run_name")
@@ -535,7 +539,11 @@ def run_training(
             def save_mid_epoch_checkpoint(event: dict) -> bool:
                 decision = None
                 if is_main_process:
-                    due_to_interval = checkpoint_interval > 0 and event["global_step"] % checkpoint_interval == 0
+                    due_to_interval = (
+                        checkpoint_interval > 0
+                        and event["optimizer_step_succeeded"]
+                        and event["global_step"] % checkpoint_interval == 0
+                    )
                     due_to_deadline = stop_at_unix > 0 and time.time() >= stop_at_unix
                     decision = {
                         "save": due_to_interval or due_to_deadline,
@@ -681,6 +689,7 @@ def run_training(
                 "train_accuracy": train_metrics["accuracy"],
                 "train_vqa_score": train_metrics["vqa_score"],
                 "train_top5_vqa_score": train_metrics["top5_vqa_score"],
+                "train_amp_skipped_updates": train_metrics["amp_skipped_updates"],
                 "val_loss": val_metrics["loss"],
                 "val_accuracy": val_metrics["accuracy"],
                 "val_vqa_score": val_metrics["vqa_score"],
@@ -742,6 +751,7 @@ def run_training(
                     "train/accuracy": train_metrics["accuracy"],
                     "train/vqa_score": train_metrics["vqa_score"],
                     "train/top5_vqa_score": train_metrics["top5_vqa_score"],
+                    "train/amp_skipped_updates": train_metrics["amp_skipped_updates"],
                     "val/loss": val_metrics["loss"],
                     "val/accuracy": val_metrics["accuracy"],
                     "val/vqa_score": val_metrics["vqa_score"],
@@ -755,6 +765,7 @@ def run_training(
                 tracker.log(epoch_log, step=global_step)
                 print(
                     f"train_loss={train_metrics['loss']:.4f} train_vqa={train_metrics['vqa_score']:.4f} "
+                    f"amp_skipped={int(train_metrics['amp_skipped_updates'])} "
                     f"val_loss={val_metrics['loss']:.4f} val_acc={val_metrics['accuracy']:.4f} "
                     f"val_vqa={val_metrics['vqa_score']:.4f} "
                     f"official_vqa={val_metrics.get('official_vqa_score', float('nan')):.2f} "

@@ -445,6 +445,7 @@ def prepare_beit3_runtime(training_command):
     config = load_config(Path(CONFIG_PATH) if Path(CONFIG_PATH).is_absolute() else REPO_ROOT / CONFIG_PATH)
     model_cfg = config["model"]
     data_cfg = config["data"]
+    amp_init_scale = float(config["train"].get("amp_init_scale", 1024.0))
     world_size = _launcher_world_size(training_command)
     benchmark_path = CHECKPOINT_DIR / "beit3_batch_benchmark.json"
     runtime_config_path = CHECKPOINT_DIR / "runtime_config.yaml"
@@ -460,6 +461,8 @@ def prepare_beit3_runtime(training_command):
                 str(data_cfg["max_question_length"]),
                 "--answer-vocab-size",
                 str(data_cfg["answer_vocab_size"]),
+                "--amp-init-scale",
+                str(amp_init_scale),
                 "--output",
                 benchmark_path,
             ]
@@ -508,6 +511,8 @@ def prepare_beit3_runtime(training_command):
             str(data_cfg["image_size"]),
             "--expected-gpus",
             str(world_size),
+            "--amp-init-scale",
+            str(amp_init_scale),
             "--output-dir",
             "/kaggle/working",
         ]
@@ -1455,6 +1460,26 @@ def main():
                         "--no-wandb",
                     ],
                     cwd=REPO_ROOT,
+                )
+                smoke_checkpoint_path = Path(smoke_dir) / "checkpoint" / "latest.pt"
+                if not smoke_checkpoint_path.is_file():
+                    raise FileNotFoundError(
+                        f"BEiT-3 data-loader smoke did not save a checkpoint: {smoke_checkpoint_path}"
+                    )
+                import torch
+
+                from vqa_project.engine import load_checkpoint
+
+                smoke_checkpoint = load_checkpoint(smoke_checkpoint_path, torch.device("cpu"))
+                successful_updates = int(
+                    smoke_checkpoint.get("training_state", {}).get("global_step", 0)
+                )
+                if successful_updates < 1:
+                    raise RuntimeError(
+                        "BEiT-3 data-loader smoke completed without a successful optimizer update."
+                    )
+                progress(
+                    f"real-data smoke checkpoint verified with {successful_updates} successful optimizer updates"
                 )
         with progress_stage("BEiT-3 runtime estimate"):
             run(

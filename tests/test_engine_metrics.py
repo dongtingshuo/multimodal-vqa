@@ -100,6 +100,63 @@ def test_gradient_accumulation_steps_on_final_partial_group() -> None:
     assert metrics["optimizer_steps"] == 2
 
 
+def test_amp_overflow_does_not_advance_optimizer_step_or_scheduler() -> None:
+    class SkipFirstScaler:
+        def __init__(self) -> None:
+            self.scale_value = 8.0
+            self.skip_next = True
+
+        def is_enabled(self) -> bool:
+            return True
+
+        def get_scale(self) -> float:
+            return self.scale_value
+
+        def scale(self, loss: torch.Tensor) -> torch.Tensor:
+            return loss
+
+        def step(self, optimizer: torch.optim.Optimizer) -> None:
+            if self.skip_next:
+                self.skip_next = False
+                return
+            optimizer.step()
+
+        def update(self) -> None:
+            if not self.skip_next:
+                self.scale_value = min(self.scale_value, 4.0)
+
+    class StepCounter:
+        def __init__(self) -> None:
+            self.steps = 0
+
+        def step_update(self) -> None:
+            self.steps += 1
+
+    model = TinyVQAModel()
+    optimizer = torch.optim.SGD(model.parameters(), lr=0.01)
+    scheduler = StepCounter()
+    callback_states = []
+    metrics = train_one_epoch(
+        model,
+        tiny_batches()[:2],
+        optimizer,
+        torch.device("cpu"),
+        grad_clip_norm=0.0,
+        scaler=SkipFirstScaler(),
+        scheduler=scheduler,
+        global_step_start=10,
+        checkpoint_callback=lambda state: callback_states.append(state) or False,
+    )
+
+    assert metrics["optimizer_steps"] == 1
+    assert metrics["amp_skipped_updates"] == 1
+    assert scheduler.steps == 1
+    assert [state["global_step"] for state in callback_states] == [10, 11]
+    assert [state["optimizer_steps_in_epoch"] for state in callback_states] == [0, 1]
+    assert [state["optimizer_step_succeeded"] for state in callback_states] == [False, True]
+    assert [state["amp_skipped_updates"] for state in callback_states] == [1, 1]
+
+
 def test_final_partial_accumulation_group_uses_its_actual_size() -> None:
     reference_model = TinyVQAModel()
     accumulated_model = TinyVQAModel()

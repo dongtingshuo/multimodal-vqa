@@ -4,6 +4,8 @@
 
 - Add an optional BEiT-3 Base VQA path with checksum-verified pretrained assets, official VQA-v2 preprocessing/scoring, leakage-screened Visual Genome sampling, dual-T4 capacity and checkpoint-resume gates, and isolated A/B/C experiment configs. Kaggle now auto-selects a safe micro-batch, preserves global batch 128, runs a real distributed save/restore smoke, and records a data-sized runtime estimate. No BEiT-3 score is claimed before Kaggle validation.
 - 增加可选 BEiT-3 Base VQA 路径，包含预训练资源校验、官方 VQA-v2 预处理/计分、无泄漏 Visual Genome 采样、双 T4 容量与 checkpoint 续训门槛，以及隔离的 A/B/C 实验配置。Kaggle 会自动选择安全 micro-batch、保持全局 batch 128、运行真实分布式保存/恢复 smoke，并记录按数据规模估算的耗时。Kaggle 验证完成前不报告 BEiT-3 成绩。
+- Fix BEiT-3 AMP preflight accounting: skipped GradScaler updates no longer advance optimizer-step state or schedulers; Kaggle benchmarks and smoke checks require successful AdamW updates before accepting measurements or checkpoint round-trips.
+- 修复 BEiT-3 AMP 预检计步：GradScaler 跳过的更新不再推进 optimizer-step 状态或 scheduler；Kaggle benchmark 和 smoke 必须实际完成 AdamW 更新，才接受测量结果或 checkpoint 往返验证。
 - Restrict download helpers to HTTPS and add traversal/link checks for Kaggle zip and AutoDL tar extraction.
 - Align the package build backend with SPDX license metadata support.
 - Add conservative dependency-update automation. An advisory audit identified the legacy Gradio/Starlette web stack, but its coupled major-version migration is deferred until checkpoint, demo, and training-runtime compatibility are tested together.

@@ -26,15 +26,23 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--answer-vocab-size", type=int, default=5000)
     parser.add_argument("--warmup-steps", type=int, default=2)
     parser.add_argument("--measure-steps", type=int, default=5)
+    parser.add_argument("--amp-init-scale", type=float, default=1024.0)
     parser.add_argument("--cache-dir", default=None)
     parser.add_argument("--output", default="beit3_batch_benchmark.json")
     return parser.parse_args()
 
 
+def _optimizer_step_count(optimizer: torch.optim.Optimizer) -> int:
+    return max(
+        (int(state["step"].item()) for state in optimizer.state.values() if "step" in state),
+        default=0,
+    )
+
+
 def benchmark_batch(model, batch_size: int, args: argparse.Namespace, device: torch.device) -> dict:
     torch.cuda.empty_cache()
     optimizer = torch.optim.AdamW(model.parameters(), lr=3e-5, betas=(0.9, 0.98), weight_decay=0.01)
-    scaler = torch.amp.GradScaler("cuda", enabled=True)
+    scaler = torch.amp.GradScaler("cuda", init_scale=args.amp_init_scale, enabled=True)
     images = torch.randn(batch_size, 3, args.image_size, args.image_size, device=device)
     input_ids = torch.randint(0, BEIT3_VOCAB_SIZE, (batch_size, args.max_question_length), device=device)
     attention_mask = torch.ones_like(input_ids)
@@ -43,18 +51,31 @@ def benchmark_batch(model, batch_size: int, args: argparse.Namespace, device: to
     elapsed_steps = 0.0
     try:
         torch.cuda.reset_peak_memory_stats(device)
-        for step in range(total_steps):
-            optimizer.zero_grad(set_to_none=True)
-            started = time.perf_counter()
-            with torch.amp.autocast(device_type="cuda", dtype=torch.float16):
-                logits = model(images, input_ids, attention_mask)
-                loss = F.cross_entropy(logits, labels)
-            scaler.scale(loss).backward()
-            scaler.step(optimizer)
-            scaler.update()
-            torch.cuda.synchronize(device)
+        step = 0
+        while step < total_steps:
+            attempts = 0
+            while True:
+                optimizer.zero_grad(set_to_none=True)
+                previous_update = _optimizer_step_count(optimizer)
+                started = time.perf_counter()
+                with torch.amp.autocast(device_type="cuda", dtype=torch.float16):
+                    logits = model(images, input_ids, attention_mask)
+                    loss = F.cross_entropy(logits, labels)
+                scaler.scale(loss).backward()
+                scaler.step(optimizer)
+                scaler.update()
+                torch.cuda.synchronize(device)
+                if _optimizer_step_count(optimizer) > previous_update:
+                    break
+                attempts += 1
+                if attempts >= 12:
+                    raise RuntimeError(
+                        f"AMP skipped 12 consecutive optimizer updates at batch size {batch_size}; "
+                        f"current loss scale is {scaler.get_scale():g}."
+                    )
             if step >= args.warmup_steps:
                 elapsed_steps += time.perf_counter() - started
+            step += 1
         return {
             "batch_size_per_gpu": batch_size,
             "status": "ok",

@@ -87,6 +87,7 @@ def train_one_epoch(
     total_top5_vqa_score = float(initial_totals.get("top5_vqa_score", 0.0))
     total_examples = int(initial_totals.get("examples", 0))
     optimizer_steps = 0
+    skipped_optimizer_steps = int(initial_totals.get("amp_skipped_updates", 0))
     last_batch = int(start_batch)
     interrupted = False
 
@@ -114,13 +115,19 @@ def train_one_epoch(
             if grad_clip_norm > 0:
                 scaler.unscale_(optimizer)
                 torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip_norm)
+            scaler_enabled = scaler.is_enabled()
+            scale_before_step = scaler.get_scale() if scaler_enabled else 1.0
             scaler.step(optimizer)
             scaler.update()
-            step_update = getattr(scheduler, "step_update", None)
-            if callable(step_update):
-                step_update()
+            step_succeeded = not scaler_enabled or scaler.get_scale() >= scale_before_step
+            if step_succeeded:
+                step_update = getattr(scheduler, "step_update", None)
+                if callable(step_update):
+                    step_update()
+                optimizer_steps += 1
+            else:
+                skipped_optimizer_steps += 1
             optimizer.zero_grad(set_to_none=True)
-            optimizer_steps += 1
 
         batch_size = batch["images"].size(0)
         predictions = logits.argmax(dim=1)
@@ -141,12 +148,15 @@ def train_one_epoch(
                         "batch_in_epoch": step,
                         "global_step": global_step_start + optimizer_steps,
                         "optimizer_steps_in_epoch": optimizer_steps,
+                        "optimizer_step_succeeded": step_succeeded,
+                        "amp_skipped_updates": skipped_optimizer_steps,
                         "local_totals": {
                             "loss": total_loss,
                             "correct": total_correct,
                             "vqa_score": total_vqa_score,
                             "top5_vqa_score": total_top5_vqa_score,
                             "examples": total_examples,
+                            "amp_skipped_updates": skipped_optimizer_steps,
                         },
                     }
                 )
@@ -165,6 +175,7 @@ def train_one_epoch(
                 "epoch": float(epoch or 0),
                 "step": float(step),
                 "global_step": float(global_step_start + optimizer_steps),
+                "train/amp_skipped_updates": float(skipped_optimizer_steps),
                 "train/loss": float(totals[0].item()) / running_examples,
                 "train/accuracy": float(totals[1].item()) / running_examples,
                 "train/vqa_score": float(totals[2].item()) / running_examples,
@@ -204,6 +215,7 @@ def train_one_epoch(
         "vqa_score": float(totals[2].item()) / total_count,
         "top5_vqa_score": float(totals[3].item()) / total_count,
         "optimizer_steps": float(optimizer_steps),
+        "amp_skipped_updates": float(skipped_optimizer_steps),
         "batch_in_epoch": float(last_batch),
         "interrupted": float(interrupted),
     }

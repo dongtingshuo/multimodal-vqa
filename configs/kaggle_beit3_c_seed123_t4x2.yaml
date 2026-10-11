@@ -35,6 +35,7 @@ train:
   preserve_effective_batch_size: true
   fixed_finetune_stage: full
   use_amp: true
+  amp_init_scale: 1024.0
   pin_memory: true
   persistent_workers: true
   checkpoint_dir: /kaggle/working/multimodal-vqa/beit3-c-seed123-t4x2
