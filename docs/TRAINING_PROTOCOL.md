@@ -91,9 +91,9 @@ Local/Kaggle artifacts and embedded checkpoint configuration are the source of r
 
 ## Dependency Compatibility / 依赖兼容策略
 
-The supported runtime is Python 3.10+ with PyTorch 2.5.1+ and Transformers 5.10+. Root requirements use `transformers>=5.10,<6.0`; AutoDL and Kaggle use the same Transformers range, and the Kaggle fallback pairs PyTorch 2.5.1 with torchvision 0.20.1 on CUDA 12.1. Keep these constraints aligned across every install path. Before changing the Transformers major version again, verify checkpoint load/inference, processor compatibility, gradient-checkpointing, and a real one-epoch training smoke run.
+The supported runtime is Python 3.10+ with PyTorch 2.5.1+ and Transformers 4.57.6. Root requirements, AutoDL, and Kaggle pin `transformers==4.57.6`: Transformers 5.19.0 changed the XLM-R tokenizer constructor and currently fails when BEiT-3's verified SentencePiece model is passed through the upstream-compatible API. Keep these constraints aligned across every install path. Before upgrading Transformers again, verify tokenizer parity, checkpoint load/inference, processor compatibility, gradient-checkpointing, and a real training smoke run on Kaggle.
 
-支持的运行环境为 Python 3.10+、PyTorch 2.5.1+ 和 Transformers 5.10+。根目录依赖使用 `transformers>=5.10,<6.0`；AutoDL 和 Kaggle 使用相同 Transformers 范围，Kaggle 回退安装使用 CUDA 12.1 对应的 PyTorch 2.5.1 与 torchvision 0.20.1。所有安装入口必须保持约束一致。下次升级 Transformers 主版本前，须验证 checkpoint 加载/推理、processor 兼容性、gradient checkpointing 和真实单 epoch 训练 smoke run。
+支持的运行环境为 Python 3.10+、PyTorch 2.5.1+ 和 Transformers 4.57.6。根目录依赖、AutoDL 和 Kaggle 统一固定 `transformers==4.57.6`：Transformers 5.19.0 更改了 XLM-R tokenizer 构造接口，当前会在 BEiT-3 传入已校验 SentencePiece 模型时失败。所有安装入口必须保持约束一致。下次升级 Transformers 前，须在 Kaggle 验证 tokenizer 编码一致性、checkpoint 加载/推理、processor 兼容性、gradient checkpointing 和真实训练 smoke run。
 
 ## BEiT-3 Improvement Program / BEiT-3 提分计划
 

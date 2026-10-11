@@ -81,7 +81,7 @@ RESUME_DATASET_OWNER = os.environ.get("RESUME_DATASET_OWNER", "dongtingshuo")
 RESUME_ROOT = Path(os.environ.get("RESUME_ROOT", f"/kaggle/input/{RESUME_DATASET_SLUG}"))
 TORCH_VERSION = os.environ.get("TORCH_VERSION", "2.5.1+cu121")
 TORCHVISION_VERSION = os.environ.get("TORCHVISION_VERSION", "0.20.1+cu121")
-TRANSFORMERS_SPEC = os.environ.get("TRANSFORMERS_SPEC", "transformers>=5.10,<6.0")
+TRANSFORMERS_SPEC = os.environ.get("TRANSFORMERS_SPEC", "transformers==4.57.6")
 PYTORCH_INDEX_URL = os.environ.get("PYTORCH_INDEX_URL", "https://download.pytorch.org/whl/cu121")
 PYTORCH_RUNTIME_DIR = Path(
     os.environ.get("PYTORCH_RUNTIME_DIR", WORK_ROOT / "pytorch-runtime")

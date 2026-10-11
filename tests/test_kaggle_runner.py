@@ -132,6 +132,19 @@ def test_kaggle_runner_defaults_to_beit3_a() -> None:
     assert run_kaggle_finetune.DEFAULT_RUN_NAME == "beit3-vqa-a-seed42-t4x2"
 
 
+def test_transformers_version_is_pinned_consistently_for_beit3_tokenizer() -> None:
+    expected = "transformers==4.57.6"
+    project_root = Path(__file__).resolve().parents[1]
+
+    assert run_kaggle_finetune.TRANSFORMERS_SPEC == expected
+    for requirements_path in (
+        project_root / "requirements.txt",
+        project_root / "autodl" / "requirements.txt",
+    ):
+        assert expected in requirements_path.read_text(encoding="utf-8")
+    assert expected in (project_root / "pyproject.toml").read_text(encoding="utf-8")
+
+
 def test_runner_adds_checked_out_repository_to_import_path(tmp_path: Path, monkeypatch) -> None:
     repo_root = tmp_path / "checkout"
     repo_root.mkdir()
