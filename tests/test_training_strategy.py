@@ -21,6 +21,7 @@ from vqa_project.training import (
     configure_finetune_stage,
     ddp_static_graph_enabled,
     resume_signature,
+    should_save_update_checkpoint,
     stage_for_epoch,
     validate_resume_config,
 )
@@ -157,6 +158,17 @@ def test_beit3_static_graph_is_limited_to_fixed_full_finetuning_with_checkpointi
     assert not ddp_static_graph_enabled({**model_cfg, "gradient_checkpointing": False}, train_cfg)
     assert not ddp_static_graph_enabled({**model_cfg, "name": "vilt"}, train_cfg)
     assert not ddp_static_graph_enabled(model_cfg, {**train_cfg, "staged_finetuning": True})
+
+
+@pytest.mark.parametrize(
+    ("step", "succeeded", "interval", "expected"),
+    [(0, True, 500, False), (1, True, 500, True), (1, False, 500, False), (1, True, 0, False),
+     (2, True, 500, False), (500, True, 500, True), (500, False, 500, False), (501, True, 500, False)],
+)
+def test_update_checkpoint_saves_initial_recovery_point_and_successful_intervals(
+    step, succeeded, interval, expected,
+) -> None:
+    assert should_save_update_checkpoint(step, succeeded, interval) is expected
 
 
 @pytest.mark.skipif(not distributed.is_gloo_available(), reason="Gloo is not available")

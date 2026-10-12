@@ -103,6 +103,10 @@ def ddp_static_graph_enabled(model_cfg: dict[str, Any], train_cfg: dict[str, Any
     )
 
 
+def should_save_update_checkpoint(global_step: int, succeeded: bool, interval: int) -> bool:
+    return bool(interval > 0 and succeeded and global_step > 0 and (global_step == 1 or global_step % interval == 0))
+
+
 def configure_finetune_stage(model: nn.Module, stage: str, train_cfg: dict[str, Any]) -> None:
     configure = getattr(model, "set_finetune_stage", None)
     if callable(configure):

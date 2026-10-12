@@ -4,6 +4,7 @@ import io
 import json
 import sys
 import tarfile
+import weakref
 import zipfile
 from pathlib import Path
 from types import SimpleNamespace
@@ -11,6 +12,54 @@ from types import SimpleNamespace
 import pytest
 
 from kaggle_finetune_kernel import run_kaggle_finetune
+
+
+def test_smoke_checkpoint_verification_does_not_retain_model_tensors(tmp_path, monkeypatch) -> None:
+    import torch
+
+    from vqa_project import engine
+
+    references = []
+
+    def load_checkpoint(*_args):
+        tensor = torch.ones(8)
+        references.append(weakref.ref(tensor))
+        return {"model_state": {"weight": tensor}, "training_state": {"global_step": 1}}
+
+    monkeypatch.setattr(engine, "load_checkpoint", load_checkpoint)
+    assert run_kaggle_finetune.verify_smoke_checkpoint(tmp_path / "latest.pt") == 1
+    assert references[0]() is None
+
+
+def test_memory_snapshot_reads_container_limits_and_oom_events(tmp_path) -> None:
+    proc = tmp_path / "proc"
+    cgroup = tmp_path / "cgroup"
+    (proc / "self").mkdir(parents=True)
+    cgroup.mkdir()
+    (proc / "self/status").write_text("VmRSS:\t1024 kB\n")
+    (proc / "meminfo").write_text("MemAvailable: 2048 kB\n")
+    (cgroup / "memory.current").write_text("1234\n")
+    (cgroup / "memory.max").write_text("5678\n")
+    (cgroup / "memory.peak").write_text("4321\n")
+    (cgroup / "memory.events").write_text("oom 2\noom_kill 1\n")
+    assert run_kaggle_finetune.memory_snapshot(proc, cgroup) == {
+        "used_bytes": 1234, "limit_bytes": 5678, "peak_bytes": 4321,
+        "runner_rss_bytes": 1048576, "host_available_bytes": 2097152,
+        "oom_events": 2, "oom_kill_events": 1,
+    }
+    (cgroup / "memory.max").write_text("max\n")
+    assert run_kaggle_finetune.memory_snapshot(proc, cgroup)["limit_bytes"] is None
+
+
+def test_memory_snapshot_supports_v1_and_unavailable_metrics(tmp_path) -> None:
+    memory = tmp_path / "memory"
+    memory.mkdir()
+    (memory / "memory.usage_in_bytes").write_text("1024\n")
+    (memory / "memory.limit_in_bytes").write_text("4096\n")
+    assert run_kaggle_finetune.memory_snapshot(tmp_path / "absent", tmp_path) == {
+        "used_bytes": 1024, "limit_bytes": 4096,
+    }
+    assert run_kaggle_finetune.memory_snapshot(tmp_path / "absent", tmp_path / "absent") == {}
 
 
 def test_resolve_vqa_data_root_supports_nested_kaggle_dataset_mount(tmp_path: Path) -> None:

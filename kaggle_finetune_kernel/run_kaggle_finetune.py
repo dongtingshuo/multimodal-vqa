@@ -138,6 +138,63 @@ def _timestamp() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
+def memory_snapshot(proc_root=Path("/proc"), cgroup_root=Path("/sys/fs/cgroup")) -> dict:
+    snapshot = {}
+    for name, paths in {
+        "used_bytes": ("memory.current", "memory/memory.usage_in_bytes"),
+        "limit_bytes": ("memory.max", "memory/memory.limit_in_bytes"),
+        "peak_bytes": ("memory.peak", "memory/memory.max_usage_in_bytes"),
+    }.items():
+        for relative in paths:
+            try:
+                value = (cgroup_root / relative).read_text().strip()
+                snapshot[name] = int(value) if value != "max" else None
+                break
+            except (OSError, ValueError):
+                continue
+    for path, key, output in (
+        (proc_root / "self/status", "VmRSS:", "runner_rss_bytes"),
+        (proc_root / "meminfo", "MemAvailable:", "host_available_bytes"),
+    ):
+        try:
+            for line in path.read_text().splitlines():
+                if line.startswith(key):
+                    snapshot[output] = int(line.split()[1]) * 1024
+                    break
+        except (OSError, ValueError, IndexError):
+            pass
+    try:
+        events = dict(line.split() for line in (cgroup_root / "memory.events").read_text().splitlines())
+        snapshot["oom_events"] = int(events.get("oom", 0))
+        snapshot["oom_kill_events"] = int(events.get("oom_kill", 0))
+    except (OSError, ValueError):
+        pass
+    return snapshot
+
+
+def record_memory_usage(stage: str) -> None:
+    snapshot = memory_snapshot()
+    if not snapshot:
+        return
+    payload = {"timestamp": _timestamp(), "stage": stage, **snapshot}
+    with PROGRESS_LOCK:
+        with (CHECKPOINT_DIR / "resource_usage.jsonl").open("a", encoding="utf-8") as output:
+            output.write(json.dumps(payload) + "\n")
+    progress(f"memory: {json.dumps(snapshot, sort_keys=True)}", stage=stage)
+
+
+def verify_smoke_checkpoint(path: Path) -> int:
+    import torch
+
+    from vqa_project.engine import load_checkpoint
+
+    checkpoint = load_checkpoint(path, torch.device("cpu"))
+    updates = int(checkpoint.get("training_state", {}).get("global_step", 0))
+    if updates < 1:
+        raise RuntimeError("BEiT-3 data-loader smoke completed without a successful optimizer update.")
+    return updates
+
+
 def _write_status(state: str, stage: str, message: str) -> None:
     if RUN_STATUS_PATH is None:
         return
@@ -188,12 +245,19 @@ def progress_stage(name: str):
     CURRENT_STAGE = name
     started = time.monotonic()
     progress("stage started")
+    monitor_memory = name in {
+        "distributed training", "BEiT-3 data-loader training smoke", "BEiT-3 distributed save/restore smoke",
+    }
+    if monitor_memory:
+        record_memory_usage(name)
     heartbeat_stop = threading.Event()
 
     def report_if_idle() -> None:
         while not heartbeat_stop.wait(HEARTBEAT_SECONDS):
             with PROGRESS_LOCK:
                 idle_for = time.monotonic() - LAST_ACTIVITY_AT
+            if monitor_memory:
+                record_memory_usage(name)
             if idle_for >= HEARTBEAT_SECONDS:
                 progress(
                     f"stage still running; elapsed={time.monotonic() - started:.0f}s, "
@@ -1384,6 +1448,7 @@ def main():
     initialize_progress_logging()
     os.environ["PYTHONUNBUFFERED"] = "1"
     os.environ["PYTHONFAULTHANDLER"] = "1"
+    os.environ.setdefault("TQDM_MININTERVAL", "60")
     os.environ.setdefault("VQA_STOP_AT_UNIX", str(time.time() + 11 * 60 * 60))
     progress(
         f"run={RUN_NAME}; config={CONFIG_PATH}; git_ref={GIT_REF}; "
@@ -1487,21 +1552,11 @@ def main():
                     raise FileNotFoundError(
                         f"BEiT-3 data-loader smoke did not save a checkpoint: {smoke_checkpoint_path}"
                     )
-                import torch
-
-                from vqa_project.engine import load_checkpoint
-
-                smoke_checkpoint = load_checkpoint(smoke_checkpoint_path, torch.device("cpu"))
-                successful_updates = int(
-                    smoke_checkpoint.get("training_state", {}).get("global_step", 0)
-                )
-                if successful_updates < 1:
-                    raise RuntimeError(
-                        "BEiT-3 data-loader smoke completed without a successful optimizer update."
-                    )
+                successful_updates = verify_smoke_checkpoint(smoke_checkpoint_path)
                 progress(
                     f"real-data smoke checkpoint verified with {successful_updates} successful optimizer updates"
                 )
+                record_memory_usage("smoke checkpoint released")
         with progress_stage("BEiT-3 runtime estimate"):
             run(
                 [

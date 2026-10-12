@@ -12,7 +12,7 @@ data:
   max_val_samples: null
   image_size: 480
   max_question_length: 64
-  num_workers: 4
+  num_workers: 2
   augmentation:
     enabled: false
 

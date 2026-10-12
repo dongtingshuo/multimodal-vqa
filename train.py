@@ -46,6 +46,7 @@ from vqa_project.training import (
     configure_finetune_stage,
     count_parameters,
     ddp_static_graph_enabled,
+    should_save_update_checkpoint,
     stage_for_epoch,
     step_scheduler,
     validate_resume_config,
@@ -542,10 +543,8 @@ def run_training(
             def save_mid_epoch_checkpoint(event: dict) -> bool:
                 decision = None
                 if is_main_process:
-                    due_to_interval = (
-                        checkpoint_interval > 0
-                        and event["optimizer_step_succeeded"]
-                        and event["global_step"] % checkpoint_interval == 0
+                    due_to_interval = should_save_update_checkpoint(
+                        event["global_step"], event["optimizer_step_succeeded"], checkpoint_interval,
                     )
                     due_to_deadline = stop_at_unix > 0 and time.time() >= stop_at_unix
                     decision = {
