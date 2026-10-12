@@ -16,6 +16,17 @@ from vqa_project.engine import (
 )
 
 
+@pytest.mark.parametrize("legacy", [False, True])
+def test_cpu_mapped_checkpoint_loading_preserves_legacy_format(tmp_path, legacy) -> None:
+    path = tmp_path / "latest.pt"
+    payload = {"model_state": {"weight": torch.ones(3)}, "training_state": {"global_step": 334}}
+    torch.save(payload, path, _use_new_zipfile_serialization=not legacy)
+    restored = load_checkpoint(path, torch.device("cpu"), mmap=True)
+    assert restored["training_state"]["global_step"] == 334
+    assert restored["model_state"]["weight"].device.type == "cpu"
+    assert torch.equal(restored["model_state"]["weight"], payload["model_state"]["weight"])
+
+
 def test_vqa_loss_is_normalized_per_example() -> None:
     logits = torch.zeros(2, 3)
     targets = torch.tensor([[1.0, 0.0, 0.0], [0.0, 0.5, 1.0]])

@@ -382,5 +382,10 @@ def capture_rng_state(data_generator: torch.Generator | None = None) -> dict[str
     }
 
 
-def load_checkpoint(path: str | Path, device: torch.device) -> dict[str, Any]:
-    return torch.load(Path(path), map_location=device, weights_only=False)
+def load_checkpoint(path: str | Path, device: torch.device, *, mmap: bool = False) -> dict[str, Any]:
+    import zipfile
+
+    checkpoint_path = Path(path)
+    # Legacy pickle checkpoints cannot be memory-mapped.
+    use_mmap = mmap and zipfile.is_zipfile(checkpoint_path)
+    return torch.load(checkpoint_path, map_location=device, weights_only=False, mmap=use_mmap)

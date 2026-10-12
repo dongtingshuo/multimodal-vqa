@@ -226,7 +226,7 @@ def run_training(
     elif is_main_process:
         print(f"Using device: {device}")
 
-    resume_checkpoint = load_checkpoint(args.resume, device) if args.resume else None
+    resume_checkpoint = load_checkpoint(args.resume, torch.device("cpu"), mmap=True) if args.resume else None
     if resume_checkpoint is not None:
         validate_resume_config(config, resume_checkpoint)
 
@@ -496,6 +496,9 @@ def run_training(
         checkpoint_metadata = resume_checkpoint.get("metadata") or {}
         if isinstance(checkpoint_metadata, dict):
             resume_wandb_id = (checkpoint_metadata.get("wandb") or {}).get("run_id")
+        resume_checkpoint = None
+        if is_main_process:
+            print(f"resume state restored: epoch={start_epoch} batch={resume_batch} global_step={global_step}; checkpoint payload released")
     tracker = (
         init_wandb_tracker(config.get("tracking", {}), config, run_name=run_name, resume_run_id=resume_wandb_id)
         if is_main_process
