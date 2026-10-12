@@ -20,8 +20,9 @@ Host-memory pressure is a hypothesis, not a measured diagnosis.
 A concrete retention issue was found in the runner: it loaded the real-data
 smoke checkpoint onto CPU and retained that local variable throughout full
 training. The checkpoint was approximately 2.77 GB on disk. Verification now
-runs in a separate function and returns only the successful-update count;
-a weak-reference regression confirms its tensor payload is released.
+runs in a short-lived CPU subprocess and returns only JSON metadata. Version 44
+showed that scope cleanup freed Python references but left approximately 2.44 GiB
+of runner RSS; process isolation avoids retaining that allocator memory.
 
 Each BEiT-3 recipe now uses two data workers per GPU rather than four. Model,
 optimizer, answer vocabulary, effective batch, and training schedule are unchanged.
@@ -34,19 +35,20 @@ Progress rendering is throttled to reduce console output; metric logging remains
 容器内存或 OOM 计数，因此宿主内存压力仍只是待验证的假设。
 
 已发现并修复明确的内存滞留：主进程加载约 2.77 GB 的 smoke checkpoint 后，
-一直保留其 CPU 张量。现在通过独立函数验证并只返回更新次数，弱引用测试
-确认张量可以释放。三组 BEiT-3 配方统一改为每卡两个数据进程；模型、优化器、
+一直保留其 CPU 张量。Version 44 实测表明，释放 Python 引用后主进程 RSS 仍
+约为 2.44 GiB，因此改为独立 CPU 子进程验证，只返回 JSON 元数据，退出时
+释放检查进程的内存。三组 BEiT-3 配方统一改为每卡两个数据进程；模型、优化器、
 词表、有效 batch 和训练策略保持一致。首次成功更新即保存恢复点，之后保持
 配置的保存间隔。新增每分钟内存与 OOM 记录，并降低进度条刷新频率。
 
 ## Acceptance / 验收
 
-Local tests cover checkpoint payload release, cgroup v1/v2 memory readings,
+Local tests cover subprocess checkpoint verification, cgroup v1/v2 memory readings,
 missing/unlimited metrics, initial and periodic checkpoint boundaries, and the
 existing accumulated dual-process training regression. A bounded Kaggle run is
 required to observe full-data memory usage and verify graceful checkpoint pause.
 These changes do not prove Version 43's termination cause or improve its score.
 
-本地测试覆盖张量释放、cgroup v1/v2、缺失或无限内存指标、首次及周期保存，
+本地测试覆盖子进程 checkpoint 验证、cgroup v1/v2、缺失或无限内存指标、首次及周期保存，
 以及已有的双进程梯度累积回归。下一轮需限时实测完整数据内存占用和暂停恢复点；
 不能据此提前宣布中断原因已确定或模型分数已提升。

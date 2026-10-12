@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import io
 import json
+import subprocess
 import sys
 import tarfile
-import weakref
 import zipfile
 from pathlib import Path
 from types import SimpleNamespace
@@ -14,21 +14,44 @@ import pytest
 from kaggle_finetune_kernel import run_kaggle_finetune
 
 
-def test_smoke_checkpoint_verification_does_not_retain_model_tensors(tmp_path, monkeypatch) -> None:
+def test_smoke_checkpoint_verification_uses_isolated_process(tmp_path, monkeypatch) -> None:
+    calls = []
+
+    def run(args, **kwargs):
+        calls.append((args, kwargs))
+        return SimpleNamespace(returncode=0, stdout='{"global_step": 1}', stderr="")
+
+    monkeypatch.setattr(run_kaggle_finetune.subprocess, "run", run)
+    assert run_kaggle_finetune.verify_smoke_checkpoint(tmp_path / "latest.pt") == 1
+    args, kwargs = calls[0]
+    assert args[0] == sys.executable
+    assert args[-4:] == ["--checkpoint", str(tmp_path / "latest.pt"), "--min-updates", "1"]
+    assert kwargs["capture_output"] is True
+    assert kwargs["timeout"] == 180
+
+
+@pytest.mark.parametrize("updates,valid", [(0, False), (1, True)])
+def test_checkpoint_inspection_cli(tmp_path, updates, valid) -> None:
     import torch
 
-    from vqa_project import engine
-
-    references = []
-
-    def load_checkpoint(*_args):
-        tensor = torch.ones(8)
-        references.append(weakref.ref(tensor))
-        return {"model_state": {"weight": tensor}, "training_state": {"global_step": 1}}
-
-    monkeypatch.setattr(engine, "load_checkpoint", load_checkpoint)
-    assert run_kaggle_finetune.verify_smoke_checkpoint(tmp_path / "latest.pt") == 1
-    assert references[0]() is None
+    checkpoint = tmp_path / "latest.pt"
+    torch.save({
+        "model_state": {"weight": torch.ones(8)}, "optimizer_state": {},
+        "scaler_state": {}, "epoch": 1,
+        "training_state": {"global_step": updates, "epoch_complete": False},
+    }, checkpoint)
+    script = Path(__file__).resolve().parents[1] / "scripts/verify_training_checkpoint.py"
+    result = subprocess.run(
+        [sys.executable, str(script), "--checkpoint", str(checkpoint), "--min-updates", "1"],
+        capture_output=True, text=True, timeout=60,
+    )
+    assert (result.returncode == 0) is valid
+    if valid:
+        metadata = json.loads(result.stdout)
+        assert metadata["global_step"] == 1
+        assert metadata["epoch_complete"] is False
+    else:
+        assert "required 1" in result.stderr
 
 
 def test_memory_snapshot_reads_container_limits_and_oom_events(tmp_path) -> None:

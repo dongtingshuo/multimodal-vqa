@@ -184,12 +184,15 @@ def record_memory_usage(stage: str) -> None:
 
 
 def verify_smoke_checkpoint(path: Path) -> int:
-    import torch
-
-    from vqa_project.engine import load_checkpoint
-
-    checkpoint = load_checkpoint(path, torch.device("cpu"))
-    updates = int(checkpoint.get("training_state", {}).get("global_step", 0))
+    # Process exit releases allocator memory as well as Python tensor references.
+    result = subprocess.run(
+        [sys.executable, str(REPO_ROOT / "scripts/verify_training_checkpoint.py"),
+         "--checkpoint", str(path), "--min-updates", "1"],
+        cwd=REPO_ROOT, capture_output=True, text=True, timeout=180,
+    )
+    if result.returncode:
+        raise RuntimeError(f"Smoke checkpoint verification failed: {result.stderr.strip()}")
+    updates = int(json.loads(result.stdout)["global_step"])
     if updates < 1:
         raise RuntimeError("BEiT-3 data-loader smoke completed without a successful optimizer update.")
     return updates
