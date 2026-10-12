@@ -469,12 +469,13 @@ def run_training(
         )
         for name, parameter in model.named_parameters():
             parameter.requires_grad_(name not in permanently_frozen)
+        static_graph = ddp_static_graph_enabled(model_cfg, train_cfg)
         training_model = DistributedDataParallel(
             model,
             device_ids=[local_rank],
             output_device=local_rank,
-            find_unused_parameters=bool(needs_unused_parameter_tracking),
-            static_graph=ddp_static_graph_enabled(model_cfg, train_cfg),
+            find_unused_parameters=bool(needs_unused_parameter_tracking) and not static_graph,
+            static_graph=static_graph,
         )
     else:
         training_model = model

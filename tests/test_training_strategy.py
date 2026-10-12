@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import copy
+
 import pytest
 import torch
 import torch.distributed as distributed
@@ -9,6 +11,7 @@ from torch.nn.parallel import DistributedDataParallel
 from torch.utils.checkpoint import checkpoint
 
 from vqa_project.config import load_config
+from vqa_project.engine import train_one_epoch, vqa_bce_loss
 from vqa_project.model import build_model
 from vqa_project.training import (
     WarmupPlateauScheduler,
@@ -28,12 +31,12 @@ class _RepeatedCheckpoint(nn.Module):
         super().__init__()
         self.shared = nn.Linear(4, 4)
 
-    def forward(self, inputs: torch.Tensor) -> torch.Tensor:
+    def forward(self, inputs: torch.Tensor, input_ids=None, attention_mask=None) -> torch.Tensor:
         inputs = checkpoint(self.shared, inputs, use_reentrant=True)
         return checkpoint(self.shared, inputs, use_reentrant=True)
 
 
-def _static_graph_worker(rank: int, init_file: str) -> None:
+def _static_graph_worker(rank: int, init_file: str, start_batch: int) -> None:
     distributed.init_process_group(
         "gloo",
         init_method=f"file://{init_file}",
@@ -41,20 +44,47 @@ def _static_graph_worker(rank: int, init_file: str) -> None:
         world_size=2,
     )
     try:
+        torch.manual_seed(42)
         model = DistributedDataParallel(
             _RepeatedCheckpoint(),
-            find_unused_parameters=True,
             static_graph=True,
         )
-        inputs = torch.randn(2, 4, requires_grad=True)
-        model(inputs).square().mean().backward()
-        gradient = model.module.shared.weight.grad
-        assert gradient is not None
-        minimum = gradient.clone()
-        maximum = gradient.clone()
-        distributed.all_reduce(minimum, op=distributed.ReduceOp.MIN)
-        distributed.all_reduce(maximum, op=distributed.ReduceOp.MAX)
-        torch.testing.assert_close(minimum, maximum)
+        reference = copy.deepcopy(model.module)
+        optimizer = torch.optim.SGD(model.parameters(), lr=0.01)
+        reference_optimizer = torch.optim.SGD(reference.parameters(), lr=0.01)
+
+        all_batches = []
+        for worker_rank in range(2):
+            generator = torch.Generator().manual_seed(100 + worker_rank)
+            batches = []
+            for _ in range(5):
+                targets = torch.rand(2, 4, generator=generator)
+                batches.append({
+                    "images": torch.rand(2, 4, generator=generator).requires_grad_(),
+                    "input_ids": torch.ones(2, 2, dtype=torch.long),
+                    "attention_mask": torch.ones(2, 2, dtype=torch.long),
+                    "targets": targets,
+                    "labels": targets.argmax(dim=1),
+                })
+            all_batches.append(batches)
+
+        for epoch in range(2):
+            offset = start_batch if epoch == 0 else 0
+            metrics = train_one_epoch(
+                model, all_batches[rank], optimizer, torch.device("cpu"),
+                grad_clip_norm=0.0, gradient_accumulation_steps=2, is_main_process=False,
+                start_batch=offset,
+            )
+            assert metrics["optimizer_steps"] == (5 - offset + 1) // 2
+            for start in range(offset, 5, 2):
+                group = [batch for batches in all_batches for batch in batches[start:start + 2]]
+                inputs = torch.cat([batch["images"] for batch in group])
+                targets = torch.cat([batch["targets"] for batch in group])
+                reference_optimizer.zero_grad(set_to_none=True)
+                vqa_bce_loss(reference(inputs), targets).backward()
+                reference_optimizer.step()
+            for actual, expected in zip(model.module.parameters(), reference.parameters()):
+                torch.testing.assert_close(actual, expected, rtol=1e-5, atol=1e-6)
     finally:
         distributed.destroy_process_group()
 
@@ -130,8 +160,11 @@ def test_beit3_static_graph_is_limited_to_fixed_full_finetuning_with_checkpointi
 
 
 @pytest.mark.skipif(not distributed.is_gloo_available(), reason="Gloo is not available")
-def test_ddp_static_graph_supports_reentrant_checkpointing(tmp_path) -> None:
-    multiprocessing.spawn(_static_graph_worker, args=(str(tmp_path / "ddp-init"),), nprocs=2, join=True)
+@pytest.mark.parametrize("start_batch", [0, 2])
+def test_ddp_static_graph_supports_reentrant_checkpointing(tmp_path, start_batch) -> None:
+    multiprocessing.spawn(
+        _static_graph_worker, args=(str(tmp_path / "ddp-init"), start_batch), nprocs=2, join=True,
+    )
 
 
 def test_vilt_optimizer_uses_backbone_and_head_learning_rates() -> None:

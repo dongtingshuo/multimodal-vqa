@@ -22,7 +22,7 @@ from vqa_project.engine import (
     restore_training_checkpoint,
     save_checkpoint,
     set_seed,
-    vqa_bce_loss,
+    train_one_epoch,
 )
 from vqa_project.model import build_model
 from vqa_project.training import build_optimizer, ddp_static_graph_enabled
@@ -58,6 +58,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run a two-GPU BEiT-3 forward/backward/checkpoint smoke test.")
     parser.add_argument("--image-size", type=int, default=480)
     parser.add_argument("--batch-size-per-gpu", type=int, default=1)
+    parser.add_argument("--gradient-accumulation-steps", type=int, default=2)
     parser.add_argument("--question-length", type=int, default=32)
     parser.add_argument("--answer-vocab-size", type=int, default=32)
     parser.add_argument("--cache-dir", default=None)
@@ -128,37 +129,39 @@ def main() -> None:
         if successful_updates >= 2:
             break
         attempts = attempt + 1
-        images = torch.rand(args.batch_size_per_gpu, 3, args.image_size, args.image_size, device=device)
-        input_ids = torch.randint(
-            3,
-            BEIT3_VOCAB_SIZE,
-            (args.batch_size_per_gpu, args.question_length),
-            device=device,
-        )
-        input_ids[:, 0] = 0
-        input_ids[:, -1] = 2
-        attention_mask = torch.ones_like(input_ids)
-        targets = torch.rand(args.batch_size_per_gpu, args.answer_vocab_size, device=device)
-        optimizer.zero_grad(set_to_none=True)
-        with torch.amp.autocast(device_type="cuda", dtype=torch.float16):
-            logits = ddp_model(images, input_ids, attention_mask)
-            loss = vqa_bce_loss(logits, targets)
-        if not torch.isfinite(loss):
-            raise RuntimeError(f"Rank {rank} produced a non-finite loss at attempt {attempts}.")
+        batches = []
+        for _ in range(args.gradient_accumulation_steps):
+            images = torch.rand(args.batch_size_per_gpu, 3, args.image_size, args.image_size)
+            input_ids = torch.randint(3, BEIT3_VOCAB_SIZE, (args.batch_size_per_gpu, args.question_length))
+            input_ids[:, 0] = 0
+            input_ids[:, -1] = 2
+            targets = torch.rand(args.batch_size_per_gpu, args.answer_vocab_size)
+            batches.append({
+                "images": images,
+                "input_ids": input_ids,
+                "attention_mask": torch.ones_like(input_ids),
+                "targets": targets,
+                "labels": targets.argmax(dim=1),
+            })
         previous_update = _optimizer_step_count(optimizer)
-        scaler.scale(loss).backward()
-        scaler.step(optimizer)
-        scaler.update()
+        metrics = train_one_epoch(
+            ddp_model, batches, optimizer, device, grad_clip_norm=1.0,
+            use_amp=True, scaler=scaler, gradient_accumulation_steps=args.gradient_accumulation_steps,
+            is_main_process=False,
+        )
+        loss_value = float(metrics["loss"])
+        if not torch.isfinite(torch.tensor(loss_value)):
+            raise RuntimeError(f"Rank {rank} produced a non-finite loss at attempt {attempts}.")
         torch.cuda.synchronize(device)
         if _optimizer_step_count(optimizer) > previous_update:
             successful_updates += 1
-            last_loss = float(loss.item())
+            last_loss = loss_value
             status = f"update={successful_updates}/2"
         else:
             status = f"overflow-skipped scale={scaler.get_scale():g}"
         print(
             f"rank={rank} gpu={torch.cuda.get_device_name(device)} attempt={attempts} {status} "
-            f"loss={loss.item():.5f} parameters={parameter_count:,}",
+            f"loss={loss_value:.5f} accumulation={args.gradient_accumulation_steps} parameters={parameter_count:,}",
             flush=True,
         )
     if successful_updates < 2:

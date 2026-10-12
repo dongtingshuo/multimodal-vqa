@@ -38,6 +38,7 @@ NETWORK_SMOKE_ONLY = os.environ.get("VQA_NETWORK_SMOKE_ONLY", "").strip().lower(
     "true",
     "yes",
 }
+BEIT3_SMOKE_ONLY = os.environ.get("VQA_BEIT3_SMOKE_ONLY", "").strip().lower() in {"1", "true", "yes"}
 RAW_DATA_ROOT = Path(
     os.environ.get(
         "RAW_DATA_ROOT",
@@ -441,6 +442,7 @@ def prepare_beit3_runtime(training_command):
 
     ensure_repo_import_path()
     from vqa_project.config import load_config
+    from vqa_project.training import accumulation_settings_for_global_batch
 
     config = load_config(Path(CONFIG_PATH) if Path(CONFIG_PATH).is_absolute() else REPO_ROOT / CONFIG_PATH)
     model_cfg = config["model"]
@@ -504,11 +506,30 @@ def prepare_beit3_runtime(training_command):
             f"gradient_accumulation={runtime_config['train']['gradient_accumulation_steps']}"
         )
 
+    runtime_config = load_config(runtime_config_path)
+    runtime_train = runtime_config["train"]
+    batch_size = int(runtime_train["batch_size"])
+    configured_accumulation = int(runtime_train["gradient_accumulation_steps"])
+    accumulation = (
+        accumulation_settings_for_global_batch(
+            batch_size * configured_accumulation, batch_size, world_size,
+        )["runtime_gradient_accumulation_steps_per_rank"]
+        if runtime_train.get("preserve_effective_batch_size", False)
+        else configured_accumulation
+    )
     smoke_command = _script_command(training_command, "scripts/smoke_beit3_distributed.py")
     smoke_command.extend(
         [
             "--image-size",
             str(data_cfg["image_size"]),
+            "--batch-size-per-gpu",
+            str(batch_size),
+            "--gradient-accumulation-steps",
+            str(accumulation),
+            "--question-length",
+            str(data_cfg["max_question_length"]),
+            "--answer-vocab-size",
+            str(data_cfg["answer_vocab_size"]),
             "--expected-gpus",
             str(world_size),
             "--amp-init-scale",
@@ -1498,6 +1519,14 @@ def main():
                 ],
                 cwd=REPO_ROOT,
             )
+
+    if BEIT3_SMOKE_ONLY:
+        progress(
+            "BEiT-3 capacity, accumulated DDP save/restore, and real-data training smoke passed",
+            state="completed",
+            stage="smoke complete",
+        )
+        return
 
     with progress_stage("distributed training"):
         train_command = train_launcher + [

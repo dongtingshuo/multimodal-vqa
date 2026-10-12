@@ -215,6 +215,13 @@ def test_beit3_preflight_benchmarks_generates_config_and_smokes_then_reuses(tmp_
     ]
     assert "--nproc_per_node=2" in commands[0]
     assert "--expected-gpus" in commands[2]
+    smoke = commands[2]
+    batch = int(smoke[smoke.index("--batch-size-per-gpu") + 1])
+    accumulation = int(smoke[smoke.index("--gradient-accumulation-steps") + 1])
+    assert batch == 2
+    assert batch * accumulation * 2 == 128
+    assert smoke[smoke.index("--question-length") + 1] == "64"
+    assert smoke[smoke.index("--answer-vocab-size") + 1] == "5000"
     commands.clear()
 
     run_kaggle_finetune.prepare_beit3_runtime(launcher)

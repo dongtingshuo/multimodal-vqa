@@ -102,7 +102,13 @@ def train_one_epoch(
         batch = move_batch_to_device(batch, device)
         should_step = step % accumulation_steps == 0 or step == total_batches
         no_sync = getattr(model, "no_sync", None)
-        sync_context = no_sync() if callable(no_sync) and not should_step else nullcontext()
+        # Static-graph DDP must observe a synchronized backward before using no_sync.
+        initialize_static_graph = bool(getattr(model, "static_graph", False)) and step == start_batch + 1
+        sync_context = (
+            no_sync()
+            if callable(no_sync) and not should_step and not initialize_static_graph
+            else nullcontext()
+        )
         with sync_context:
             with torch.amp.autocast(device_type=device.type, enabled=amp_enabled):
                 logits = forward_model(model, batch)
