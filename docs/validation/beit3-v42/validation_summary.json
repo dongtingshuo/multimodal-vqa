@@ -1,0 +1,40 @@
+{
+  "kernel": "dongtingshuo/multimodal-vqa-finetune",
+  "version": 42,
+  "status": "COMPLETE",
+  "code_commit": "107d18b46eea47a70b4e6f4f1c9f000a1f62b8bd",
+  "smoke_completed_at": "2026-10-12T11:46:28+08:00",
+  "hardware": {"world_size": 2, "devices": ["Tesla T4", "Tesla T4"]},
+  "runtime": {"torch": "2.10.0+cu128", "transformers": "4.57.6"},
+  "configuration": {
+    "model": "beit3_base",
+    "image_size": 480,
+    "answer_vocab_size": 5000,
+    "question_length": 64,
+    "batch_per_gpu": 8,
+    "accumulation_per_gpu": 8,
+    "effective_global_batch": 128
+  },
+  "distributed_restore_smoke": {
+    "successful_updates_per_rank": [2, 2],
+    "checkpoint_bytes": 2772557265,
+    "model_restore": true,
+    "optimizer_restore": true,
+    "amp_scaler_restore": true,
+    "rank_rng_restore": true
+  },
+  "strict_data_validation": {
+    "train_images": 82783,
+    "validation_images": 40504,
+    "train_questions": 443757,
+    "validation_questions": 214354
+  },
+  "real_data_smoke": {
+    "train_examples": 128,
+    "validation_examples": 128,
+    "successful_optimizer_updates": 1,
+    "amp_skipped_updates": 0,
+    "best_and_latest_saved": true
+  },
+  "full_validation_score_measured": false
+}

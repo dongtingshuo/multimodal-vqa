@@ -1,0 +1,77 @@
+seed: 42
+device: cuda
+data:
+  root: /kaggle/working/multimodal-vqa/vqa
+  train_split: train
+  val_split: val
+  answer_vocab_path: /kaggle/working/multimodal-vqa/answer_vocab.json
+  answer_vocab_size: 5000
+  answer_normalization: vqa_v2
+  max_train_samples: null
+  max_val_samples: null
+  image_size: 480
+  max_question_length: 64
+  num_workers: 4
+  augmentation:
+    enabled: false
+model:
+  name: beit3_base
+  drop_path_rate: 0.1
+  gradient_checkpointing: true
+  cache_dir: /kaggle/working/multimodal-vqa/beit3-assets
+train:
+  batch_size: 8
+  epochs: 10
+  lr: 3.0e-05
+  backbone_lr: 3.0e-05
+  head_lr: 0.0006
+  betas:
+  - 0.9
+  - 0.98
+  weight_decay: 0.01
+  grad_clip_norm: 1.0
+  gradient_accumulation_steps: 16
+  preserve_effective_batch_size: true
+  fixed_finetune_stage: full
+  use_amp: true
+  amp_init_scale: 1024.0
+  pin_memory: true
+  persistent_workers: true
+  checkpoint_dir: /kaggle/working/multimodal-vqa/beit3-a-t4x2
+  checkpoint_name: best.pt
+  latest_checkpoint_name: latest.pt
+  log_every: 100
+  selection_metric: official_vqa_score
+  use_scheduler: true
+  scheduler: warmup_cosine
+  warmup_ratio: 0.1
+  label_smoothing: 0.0
+  early_stopping_start_epoch: 4
+  early_stopping_patience: 3
+  early_stopping_min_delta: 0.1
+runtime:
+  run_dir: /kaggle/working/multimodal-vqa/runs
+  run_name: beit3-vqa-a-seed42-t4x2
+  use_run_dir: false
+  checkpoint_every_updates: 500
+  batch_benchmark:
+    report: /kaggle/working/multimodal-vqa/beit3-vqa-a-seed42-t4x2/beit3_batch_benchmark.json
+    world_size: 2
+    selected_batch_size_per_gpu: 8
+    target_global_batch_size: 128
+    runtime_gradient_accumulation_steps_per_rank: 8
+tracking:
+  wandb:
+    enabled: false
+    required: false
+    project: multimodal-vqa
+    tags:
+    - kaggle
+    - t4x2
+    - beit3-base
+    - vqa-v2
+    - seed42
+    - experiment-a
+    log_checkpoints: false
+infer:
+  topk: 5

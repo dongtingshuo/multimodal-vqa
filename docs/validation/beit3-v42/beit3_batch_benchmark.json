@@ -1,0 +1,130 @@
+{
+  "model": "BEiT-3 Base",
+  "image_size": 480,
+  "world_size": 2,
+  "results": [
+    {
+      "batch_size_per_gpu": 1,
+      "status": "ok",
+      "device_name": "Tesla T4",
+      "samples_per_second": 3.747785144241656,
+      "peak_allocated_gib": 4.358521938323975,
+      "peak_reserved_gib": 4.677734375,
+      "device_total_gib": 14.56219482421875,
+      "per_gpu": [
+        {
+          "batch_size_per_gpu": 1,
+          "status": "ok",
+          "device_name": "Tesla T4",
+          "samples_per_second": 3.747785144241656,
+          "peak_allocated_gib": 4.358521938323975,
+          "peak_reserved_gib": 4.677734375,
+          "device_total_gib": 14.56219482421875
+        },
+        {
+          "batch_size_per_gpu": 1,
+          "status": "ok",
+          "device_name": "Tesla T4",
+          "samples_per_second": 3.744245971966797,
+          "peak_allocated_gib": 4.358521938323975,
+          "peak_reserved_gib": 4.677734375,
+          "device_total_gib": 14.56219482421875
+        }
+      ]
+    },
+    {
+      "batch_size_per_gpu": 2,
+      "status": "ok",
+      "device_name": "Tesla T4",
+      "samples_per_second": 4.6939458276237875,
+      "peak_allocated_gib": 4.385599136352539,
+      "peak_reserved_gib": 4.83984375,
+      "device_total_gib": 14.56219482421875,
+      "per_gpu": [
+        {
+          "batch_size_per_gpu": 2,
+          "status": "ok",
+          "device_name": "Tesla T4",
+          "samples_per_second": 4.6939458276237875,
+          "peak_allocated_gib": 4.385599136352539,
+          "peak_reserved_gib": 4.83984375,
+          "device_total_gib": 14.56219482421875
+        },
+        {
+          "batch_size_per_gpu": 2,
+          "status": "ok",
+          "device_name": "Tesla T4",
+          "samples_per_second": 4.723126467670855,
+          "peak_allocated_gib": 4.385599136352539,
+          "peak_reserved_gib": 4.83984375,
+          "device_total_gib": 14.56219482421875
+        }
+      ]
+    },
+    {
+      "batch_size_per_gpu": 4,
+      "status": "ok",
+      "device_name": "Tesla T4",
+      "samples_per_second": 5.473394105198006,
+      "peak_allocated_gib": 4.367483615875244,
+      "peak_reserved_gib": 5.185546875,
+      "device_total_gib": 14.56219482421875,
+      "per_gpu": [
+        {
+          "batch_size_per_gpu": 4,
+          "status": "ok",
+          "device_name": "Tesla T4",
+          "samples_per_second": 5.473394105198006,
+          "peak_allocated_gib": 4.367483615875244,
+          "peak_reserved_gib": 5.185546875,
+          "device_total_gib": 14.56219482421875
+        },
+        {
+          "batch_size_per_gpu": 4,
+          "status": "ok",
+          "device_name": "Tesla T4",
+          "samples_per_second": 5.467605232755631,
+          "peak_allocated_gib": 4.367483615875244,
+          "peak_reserved_gib": 5.185546875,
+          "device_total_gib": 14.56219482421875
+        }
+      ]
+    },
+    {
+      "batch_size_per_gpu": 8,
+      "status": "ok",
+      "device_name": "Tesla T4",
+      "samples_per_second": 5.9816062008397175,
+      "peak_allocated_gib": 4.638823986053467,
+      "peak_reserved_gib": 5.857421875,
+      "device_total_gib": 14.56219482421875,
+      "per_gpu": [
+        {
+          "batch_size_per_gpu": 8,
+          "status": "ok",
+          "device_name": "Tesla T4",
+          "samples_per_second": 5.9816062008397175,
+          "peak_allocated_gib": 4.638823986053467,
+          "peak_reserved_gib": 5.857421875,
+          "device_total_gib": 14.56219482421875
+        },
+        {
+          "batch_size_per_gpu": 8,
+          "status": "ok",
+          "device_name": "Tesla T4",
+          "samples_per_second": 5.9815006465834175,
+          "peak_allocated_gib": 4.638823986053467,
+          "peak_reserved_gib": 5.857421875,
+          "device_total_gib": 14.56219482421875
+        }
+      ]
+    }
+  ],
+  "selected_batch_size_per_gpu": 8,
+  "target_global_batch_size": 128,
+  "accumulation_settings": {
+    "config_gradient_accumulation_steps": 16,
+    "runtime_gradient_accumulation_steps_per_rank": 8
+  },
+  "safety_limit": "both peak allocated and reserved memory below 88% of device capacity"
+}

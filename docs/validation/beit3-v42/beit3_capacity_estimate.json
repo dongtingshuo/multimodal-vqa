@@ -1,0 +1,21 @@
+{
+  "world_size": 2,
+  "selected_batch_size_per_gpu": 8,
+  "target_global_batch_size": 128,
+  "per_gpu_samples_per_second": [
+    5.9816062008397175,
+    5.9815006465834175
+  ],
+  "train_examples_per_epoch": 443757,
+  "visual_genome_candidate_examples": 0,
+  "visual_genome_sampled_per_epoch": 0,
+  "total_training_examples_per_epoch": 443757,
+  "validation_examples_per_epoch": 214354,
+  "epochs_configured": 10,
+  "model_only_epoch_hours": 20.25831940803017,
+  "planning_epoch_hours_with_1_5x_overhead": 30.387479112045256,
+  "planning_total_hours": 303.8747911204526,
+  "estimated_sessions_at_configured_limit": 29,
+  "session_hours_assumption": 10.5,
+  "estimate_note": "Approximation from short GPU-only forward/backward throughput; the 1.5x planning factor is a buffer, not a guarantee. Data loading, checkpoint I/O, startup, and early stopping may change wall time."
+}
