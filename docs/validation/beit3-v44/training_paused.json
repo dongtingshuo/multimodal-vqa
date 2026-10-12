@@ -1,0 +1,7 @@
+{
+  "epoch": 1,
+  "batch_in_epoch": 2672,
+  "global_step": 334,
+  "latest_checkpoint": "/kaggle/working/multimodal-vqa/beit3-vqa-a-seed42-t4x2/latest.pt",
+  "reason": "session_time_budget"
+}

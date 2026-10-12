@@ -1,0 +1,18 @@
+{
+  "best_epoch": null,
+  "best_metrics": {},
+  "total_epochs": 0,
+  "total_seconds": 3322.7539778049995,
+  "artifacts": {
+    "checkpoint": "/kaggle/working/multimodal-vqa/beit3-vqa-a-seed42-t4x2/best.pt",
+    "latest_checkpoint": "/kaggle/working/multimodal-vqa/beit3-vqa-a-seed42-t4x2/latest.pt",
+    "history": "/kaggle/working/multimodal-vqa/beit3-vqa-a-seed42-t4x2/training_history.csv",
+    "curves": "/kaggle/working/multimodal-vqa/beit3-vqa-a-seed42-t4x2/training_curves.png",
+    "summary": "/kaggle/working/multimodal-vqa/beit3-vqa-a-seed42-t4x2/run_summary.json",
+    "config_snapshot": "/kaggle/working/multimodal-vqa/beit3-vqa-a-seed42-t4x2/config.snapshot.json"
+  },
+  "wandb": {
+    "enabled": false,
+    "reason": "disabled"
+  }
+}

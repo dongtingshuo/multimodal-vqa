@@ -1,0 +1,41 @@
+{
+  "kernel": "dongtingshuo/multimodal-vqa-finetune",
+  "version": 44,
+  "status": "COMPLETE",
+  "code_commit": "dff253a0e947a9304000d223fb684cf41804914f",
+  "purpose": "75-minute bounded resource and recovery diagnostic",
+  "pause_reason": "session_time_budget",
+  "epoch": 1,
+  "batch_in_epoch": 2672,
+  "batches_per_epoch": 27347,
+  "successful_optimizer_updates": 334,
+  "completed_epochs": 0,
+  "world_size": 2,
+  "effective_global_batch": 128,
+  "train_examples_seen": 42752,
+  "amp_skipped_updates": 0,
+  "data_fingerprint": "fab55f1bef9da96f5f379727e2c2d2f8fdecff2b054a7c426905e54eb77e22e4",
+  "memory": {
+    "sample_count": 66,
+    "max_used_gib": 26.904739379882812,
+    "max_peak_gib": 26.96656036376953,
+    "limit_gib": 30.0,
+    "oom_events": 0,
+    "oom_kill_events": 0
+  },
+  "checkpoint": {
+    "bytes": 2772574122,
+    "sha256": "ad3dacea39aaccf0020f952ac5b2c6fba0dc52b29bd0a9fc3294bc5772c4cd4e",
+    "cpu_load_verified": true,
+    "epoch_complete": false,
+    "optimizer_state_present": true,
+    "scheduler_state_present": true,
+    "amp_state_present": true,
+    "rank_rng_states": 2,
+    "answer_vocabulary_size": 5000,
+    "resumed_gpu_execution_verified": false
+  },
+  "full_validation_score_measured": false,
+  "subprocess_isolation_exercised": false,
+  "eleven_hour_stability_verified": false
+}

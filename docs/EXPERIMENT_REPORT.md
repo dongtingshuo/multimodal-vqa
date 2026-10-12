@@ -438,7 +438,24 @@ The next model-family experiment is an optional BEiT-3 Base VQA classifier. The 
 
 At implementation time, a local CPU integration check loaded 100% of the expected pretrained backbone parameters (12/12 encoder layers), ran a finite 224 px forward pass, and verified that positional embeddings interpolate to the 480 px grid in FP32. The Kaggle runner and notebook now automatically benchmark candidate micro-batches, generate and reuse a global-batch-preserving runtime config, run the distributed checkpoint smoke, and save a data-sized time estimate. These new GPU gates have **not** been run: this local environment has no CUDA devices. No BEiT-3 training, validation score, Kaggle run, or performance improvement is claimed in this report.
 
-实现阶段的本地 CPU 集成检查已加载预期预训练骨干参数的 100%（12/12 层），完成有限值 224 px 前向，并验证位置编码可在 FP32 下插值到 480 px 网格。Kaggle runner 和 notebook 现会自动测量候选 micro-batch、生成并复用保持全局 batch 的运行配置、执行分布式 checkpoint smoke，并保存按数据规模计算的耗时估算。这些 GPU 门槛**尚未运行**：当前本机没有 CUDA 设备。本报告不声称 BEiT-3 已训练、已有验证分数、已在 Kaggle 运行或已取得性能提升。
+实现阶段的本地 CPU 集成检查已加载预期预训练骨干参数的 100%（12/12 层），完成有限值 224 px 前向，并验证位置编码可在 FP32 下插值到 480 px 网格。Kaggle runner 和 notebook 会自动测量候选 micro-batch、生成并复用保持全局 batch 的运行配置、执行分布式 checkpoint smoke，并保存按数据规模计算的耗时估算。该段记录实现时的本地检查；后续 Kaggle 执行证据如下，不代表已取得验证分数或性能提升。
+
+### Kaggle Execution Evidence / Kaggle 执行证据
+
+Version 42 passed real dual-T4 forward/backward and checkpoint restoration gates.
+Version 43 entered full training but failed without an exposed termination cause.
+Version 44 completed a bounded 75-minute resource diagnostic and saved an
+in-epoch recovery point at epoch 1, batch 2,672/27,347, update 334. No epoch or
+full validation completed. Its maximum memory peak was 26.97 GiB against a
+30 GiB limit, with zero OOM events. The checkpoint inspection subprocess change
+was not part of Version 44. See [Version 44 evidence](validation/beit3-v44/README.md).
+These runs establish execution and pause evidence, not improved official scores.
+
+Version 42 通过真实双 T4 前后向和恢复检查；Version 43 已进入全量训练，但失败
+原因未确认。Version 44 成功完成 75 分钟限时诊断，在第 1 轮 batch 2,672、
+更新 334 后正常保存并暂停，没有完成完整 epoch 和验证。内存峰值为 26.97/30 GiB，
+OOM 计数为零；本次不包含后续提交的检查进程隔离修复。
+上述结果只提供执行与暂停证据，不代表官方分数提升。
 
 ### Predeclared experiments / 预注册实验
 
