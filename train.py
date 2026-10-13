@@ -163,7 +163,7 @@ def initialize_distributed(configured_device: str) -> tuple[torch.device, int, i
     distributed.init_process_group(
         backend="nccl",
         init_method="env://",
-        timeout=datetime.timedelta(hours=2),
+        timeout=datetime.timedelta(hours=4),
     )
     return torch.device("cuda", local_rank), rank, world_size, local_rank
 
