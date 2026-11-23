@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import os
 
-from transformers import AutoModel, AutoTokenizer, ViltModel, ViltProcessor
+from transformers import AutoModel, AutoTokenizer, ViltConfig, ViltModel, ViltProcessor
 
 
 def _local_only() -> bool:
@@ -42,6 +42,16 @@ def load_vilt_model(model_name: str):
         if _local_only():
             raise RuntimeError(_missing_local_model_message(model_name)) from exc
         return ViltModel.from_pretrained(model_name)
+
+
+def load_vilt_config(model_name: str):
+    """Read architecture metadata without downloading redundant pretrained weights."""
+    try:
+        return ViltConfig.from_pretrained(model_name, local_files_only=True)
+    except OSError as exc:
+        if _local_only():
+            raise RuntimeError(_missing_local_model_message(model_name)) from exc
+        return ViltConfig.from_pretrained(model_name)
 
 
 def load_vilt_processor(model_name: str):

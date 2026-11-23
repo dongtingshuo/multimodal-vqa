@@ -23,6 +23,7 @@ Maintain a reproducible PyTorch visual question answering system for VQA v2.0 an
 - `vqa_project/data.py`, `answers.py`: VQA dataset, batching, answer normalization, and vocabulary.
 - `vqa_project/engine.py`, `training.py`, `tracking.py`: train/evaluate loops, staged fine-tuning, checkpoint/resume, histories, curves, and run metadata.
 - `train.py`, `evaluate.py`, `infer.py`, `demo.py`: user-facing training, evaluation, CLI inference, and Gradio entry points.
+- `macos/`: VQA Studio, a SwiftUI app for macOS 14+ with local image and conversation storage. It calls the persistent JSON-lines inference worker in `vqa_project/desktop_worker.py`; no HTTP service is needed. Build with `scripts/build_macos_app.py`; validate with `scripts/check_macos_app.py`. The signed local build requires its own Python environment and model files.
 - `scripts/`: dataset preparation/validation, official evaluation adapter, experiment summaries, and error analysis.
 - BEiT-3 preparation and hardware gates: `scripts/prepare_visual_genome_qa.py`, `scripts/create_beit3_replication_config.py`, `scripts/benchmark_beit3_batch.py`, `scripts/prepare_beit3_runtime_config.py`, `scripts/smoke_beit3_distributed.py`, and `scripts/estimate_beit3_runtime.py`.
 - `kaggle_finetune_kernel/run_kaggle_finetune.py`: Kaggle orchestration; `autodl/`: AutoDL continuation workflow.
@@ -33,7 +34,7 @@ Maintain a reproducible PyTorch visual question answering system for VQA v2.0 an
 - Kaggle COCO sources: when no complete image mount is available, the runner downloads the official `train2014.zip` and `val2014.zip` from COCO's S3 host into `/tmp`; the download is resumable within a running session.
 - Optional private pack kernels: `dongtingshuo/multimodal-vqa-coco-train-pack` and `dongtingshuo/multimodal-vqa-coco-val-pack`. Their outputs are not attached to the main training kernel because Kaggle worker-side input mounts proved intermittent.
 - Recommended published checkpoint: ViLT seed 42, release `v0.3.0`; see `README.md` and `docs/evaluation/` for metrics and provenance.
-- Experimental candidate: BEiT-3 Base, generic pretrained weights only; `configs/kaggle_beit3_a_t4x2.yaml`, `configs/kaggle_beit3_b_vg_t4x2.yaml`, and `configs/kaggle_beit3_c_seed123_t4x2.yaml` define VQA-only A, screened Visual Genome B, and seed-123 replication C. No BEiT-3 training score exists yet.
+- Experimental candidate: BEiT-3 Base, initialized from the generic pretrained backbone. VQA-only Experiment A completed 10 epochs on dual T4. Its selected epoch-9 checkpoint gives reproducible official-toolkit public validation overall 74.22 on all 214,354 questions. The 75.00 target was not met; B and C were not run. See `docs/evaluation/beit3-a-official-vqa-provenance.json` and `docs/EXPERIMENT_REPORT.md`.
 
 ## Runtime and Tests / 运行与测试
 
@@ -44,6 +45,9 @@ Maintain a reproducible PyTorch visual question answering system for VQA v2.0 an
 - Validate real data before training with `python scripts/validate_vqa_data.py --root <data-root> --sample-images 20 --strict-full`.
 
 ## Current Status and Decisions / 当前状态与决策
+
+- Experiment A is closed at 74.22. The source commit, recovery patch digest, dataset/checkpoint hashes, and two matching official-toolkit results are recorded in public provenance. `best.pt` is epoch 9/update 30763; `latest.pt` is the completed epoch 10/update 34181 state. Weights and raw data remain out of Git, and ViLT v0.3.0 remains the recommended downloadable release.
+- VQA Studio source, icon sources, packaging and test entry points are versioned; locally compiled app bundles, personal library data and development outputs are not distributed in Git.
 
 - Directly attaching the raw COCO Dataset and attaching packed Notebook outputs both produced intermittent worker-side mount failures before Python startup. The main training kernel therefore has no `dataset_sources` or `kernel_sources`.
 - The optional train and validation pack kernels completed successfully. Their archives contain 82,783 train images (13,889,986,198 source bytes) and 40,458 validation images (6,821,605,333 source bytes), plus VQA JSON files. A full packaged-input smoke also passed once on two T4s, but a later main-kernel attempt failed mounting the validation output after 30 retries; do not rely on this path as the default.
@@ -74,6 +78,6 @@ Maintain a reproducible PyTorch visual question answering system for VQA v2.0 an
 
 ## Prioritized TODO / 优先事项
 
-1. Retrieve Version 47 logs when available and verify the V46 checkpoint SHA/manifest, runner restore at epoch 1/batch 24,000/global step 3,000, and a subsequent optimizer update above step 3,000. Then collect the first complete official validation result before considering experiment B.
-2. Execute only the predeclared A/B/C experiments, preserve each run separately, and evaluate all 214,354 validation predictions with the same official VQA toolkit.
-3. Keep ViLT `v0.3.0` recommended unless the selected BEiT-3 candidate and independent seed replication satisfy the documented promotion gates; do not resume ViLT Version 34 unchanged.
+1. Preserve the completed A experiment as the comparison baseline. B (screened Visual Genome) and C (independent seed) remain optional future experiments; do not extend the completed A schedule.
+2. Keep ViLT `v0.3.0` recommended unless the documented BEiT-3 promotion gates are satisfied.
+3. Keep the macOS build and local inference workflow reproducible. Treat a notarized standalone distribution as a separate release task.

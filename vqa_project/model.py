@@ -5,9 +5,10 @@ from types import SimpleNamespace
 import torch
 from torch import nn
 from torchvision.models import ResNet50_Weights, resnet50
+from transformers import ViltModel
 
 from .beit3 import BEiT3VQAModel
-from .hf import load_text_model, load_vilt_model
+from .hf import load_text_model, load_vilt_config, load_vilt_model
 
 
 class ImageEncoder(nn.Module):
@@ -389,14 +390,16 @@ class ViltVQAModel(nn.Module):
         hidden_dim: int | None = None,
         num_attention_heads: int | None = None,
         pretrained_cnn: bool | None = None,
+        load_pretrained: bool = True,
     ) -> None:
         super().__init__()
         _ = text_model_name, hidden_dim, num_attention_heads, pretrained_cnn
-        self.backbone = (
-            TinyViltModel(hidden_size=mock_hidden_size)
-            if mock_backbones
-            else load_vilt_model(pretrained_model_name)
-        )
+        if mock_backbones:
+            self.backbone = TinyViltModel(hidden_size=mock_hidden_size)
+        elif load_pretrained:
+            self.backbone = load_vilt_model(pretrained_model_name)
+        else:
+            self.backbone = ViltModel(load_vilt_config(pretrained_model_name))
         self.pretrained_model_name = pretrained_model_name
         self.default_trainable_layers = max(int(trainable_layers), 1)
         hidden_size = int(self.backbone.config.hidden_size)
@@ -667,6 +670,8 @@ def build_model(
     except KeyError as exc:
         available = ", ".join(sorted(MODEL_REGISTRY))
         raise ValueError(f"Unknown model name '{model_name}'. Available models: {available}") from exc
+    if model_name == "vilt":
+        model_cfg["load_pretrained"] = load_pretrained
     if model_name == "beit3_base":
         # Shared defaults for text/CNN models do not apply to the BEiT-3 architecture.
         for key in (

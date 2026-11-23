@@ -61,3 +61,23 @@ def test_model_factory_rejects_unknown_variant() -> None:
     config["name"] = "unknown"
     with pytest.raises(ValueError, match="Unknown model name"):
         build_model(config)
+
+
+def test_vilt_checkpoint_restore_does_not_load_pretrained_weights(monkeypatch) -> None:
+    from transformers import ViltConfig
+
+    import vqa_project.model as module
+
+    architecture = ViltConfig(
+        hidden_size=16, num_hidden_layers=1, num_attention_heads=4,
+        intermediate_size=32, image_size=32, patch_size=16,
+    )
+    monkeypatch.setattr(module, "load_vilt_config", lambda _name: architecture)
+
+    def unexpected_download(_name):
+        raise AssertionError("Restoring a trained checkpoint must not fetch pretrained weights")
+
+    monkeypatch.setattr(module, "load_vilt_model", unexpected_download)
+    restored = build_model({"name": "vilt", "gradient_checkpointing": False}, answer_vocab_size=5, load_pretrained=False)
+    assert restored.backbone.config.hidden_size == 16
+    assert restored.classifier[-1].out_features == 5

@@ -43,3 +43,9 @@ logs/
 .vscode/
 .DS_Store
 Thumbs.db
+
+# Generated macOS build products and local installer state
+/macos/.build/
+/VQA Studio.app/
+/.vqa-studio-install-*/
+/.vqa-studio-install.lock

@@ -1,12 +1,12 @@
-# Multimodal Visual Question Answering (VQA)
+# Multimodal VQA and VQA Studio
 
 [![CI](https://github.com/dongtingshuo/multimodal-vqa/actions/workflows/ci.yml/badge.svg)](https://github.com/dongtingshuo/multimodal-vqa/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/Python-3.10%2B-3776AB.svg)](pyproject.toml)
 
-基于多模态融合的视觉问答系统。工程提供数据准备、模型训练、评估、命令行推理、Gradio Web 演示、模型变体对比和错误分析流程，默认面向 VQA v2.0 与 COCO 2014 图像数据。
+基于 PyTorch 的多模态视觉问答系统，面向 VQA v2.0 与 COCO 2014。支持可复现训练、官方协议评估、命令行推理、Gradio 演示和原生 macOS 应用 VQA Studio。
 
-A research-oriented multimodal Visual Question Answering system with data preparation, model training, evaluation, command-line inference, a Gradio web demo, model-variant comparison, and error analysis. The default workflow targets VQA v2.0 with COCO 2014 images.
+A PyTorch visual question answering system for VQA v2.0 and COCO 2014, with reproducible training, official-protocol evaluation, CLI inference, a Gradio demo, and the native VQA Studio app for macOS.
 
 ## Project Status / 项目状态
 
@@ -14,9 +14,15 @@ A research-oriented multimodal Visual Question Answering system with data prepar
 | --- | --- | ---: | ---: | ---: |
 | ViLT seed-42 checkpoint (`v0.3.0`) | Recommended engineering release / 推荐工程版本 | **0.6126** | **0.7101** | **68.42** |
 | ViLT T4x2 continuation (Kaggle V34) | Evaluated experiment; not promoted / 已评测实验；未晋升 | 0.6084 | 0.7067 | 68.08 |
-| BEiT-3 Base A/B/C | Experimental implementation; training and evaluation pending / 实验性实现；待训练和评测 | — | — | — |
+| BEiT-3 Base A (best: epoch 9 of 10) | Highest verified validation score; experimental weights / 已核验最高验证分；实验权重 | 0.6667 | 0.7546 | **74.22** |
 | Staged cross-attention checkpoint (`v0.2.0`) | Archived comparison release / 历史对照版本 | 0.5239 | 0.6233 | Not evaluated |
 | Legacy checkpoint (`v0.1.0`) | Archived release / 历史发布 | 0.4775 | Not recorded | Not evaluated |
+
+BEiT-3 A completed 10 epochs. The selected epoch-9 checkpoint scored **74.22** over all 214,354 public validation questions in two matching runs of the official toolkit, **5.80 points** above ViLT. This is not a hidden test-server result. See [metrics](docs/evaluation/beit3-a-official-vqa-metrics.json), [provenance](docs/evaluation/beit3-a-official-vqa-provenance.json), and the [experiment report](docs/EXPERIMENT_REPORT.md). ViLT remains the recommended downloadable release.
+
+BEiT-3 A 已完成 10 轮。第 9 轮最佳权重在全部 214,354 道公开验证题上经官方工具两次复评均为 **74.22**，较 ViLT 高 **5.80 分**。这不是隐藏测试服务器成绩。见[指标](docs/evaluation/beit3-a-official-vqa-metrics.json)、[核验记录](docs/evaluation/beit3-a-official-vqa-provenance.json)和[实验报告](docs/EXPERIMENT_REPORT.md)。可下载的推荐版本仍为 ViLT。
+
+Internal metrics cover 210,834 examples for BEiT-3 A and 209,608 for ViLT. Cross-model comparisons use the official full-split scores. / BEiT-3 A 和 ViLT 的内部指标分别覆盖 210,834 和 209,608 条样本；跨模型比较使用全量官方协议分数。
 
 The ViLT run completed through the configured early-stopping rule at epoch 7, selected epoch 5, and exported predictions for all 214,354 validation questions. The official VQA Evaluation Toolkit reports `68.42` on the VQA v2 validation annotations. This is an official-protocol local validation result, not a test-dev/test-standard leaderboard submission.
 
@@ -29,7 +35,8 @@ Kaggle V34 从 epoch 4 继续同一 ViLT 实验，并在 epoch 6 早停，验证
 ## Core Capabilities / 核心能力
 
 - **Multimodal architecture / 多模态架构**: ViLT joint vision-language transformer plus the established ResNet-50/DistilBERT cross-attention family.
-- **Experimental backbone / 实验性骨干**: optional BEiT-3 Base VQA path with verified pretrained assets and official VQA-v2 preprocessing; it has no project-trained score yet and is not the recommended checkpoint.
+- **Experimental backbone / 实验性骨干**: BEiT-3 Base with verified pretrained assets and official VQA v2 preprocessing.
+- **Native macOS workspace / 原生 macOS 工作台**: VQA Studio offers a local image library, question history, ranked answers, and conversation export through the same Python inference pipeline.
 - **Model variants / 模型变体**: `vilt`, `text_only`, `image_only`, `baseline_concat`, `cross_attention`, and `strong_cross_attention` share one model factory and inference interface.
 - **Comparison workflow / 对比流程**: lightweight report generation for validating model-variant comparison without external downloads.
 - **Question-type error analysis / 问题类型错误分析**: keyword-based diagnostics for color, count, object, location, yes/no, and other questions.
@@ -241,9 +248,9 @@ python train.py --config configs/kaggle_vilt.yaml --device cuda --no-wandb
 
 ### Experimental BEiT-3 Route / BEiT-3 实验路线
 
-BEiT-3 is an optional, untrained research candidate. The existing ViLT `v0.3.0` release remains recommended until a candidate completes the full protocol and exceeds the same official validation score. The BEiT-3 source implementation is MIT-licensed; the project pins the TorchScale commit and verifies the downloaded Base checkpoint and SentencePiece model by SHA-256 before use. See the [BEiT-3 experiment protocol](docs/TRAINING_PROTOCOL.md) and [model card](MODEL_CARD.md#experimental-candidate-beit-3-base).
+BEiT-3 A completed training at 74.22, below the original 75.00 target. The B data comparison and C independent training replication have not run. The project pins TorchScale and checks the generic Base checkpoint and SentencePiece model by SHA-256. See the [training protocol](docs/TRAINING_PROTOCOL.md) and [model card](MODEL_CARD.md#experimental-candidate-beit-3-base).
 
-BEiT-3 是尚未训练出项目指标的可选研究候选。候选完整通过实验协议并在同一官方验证集上超过现有结果前，仍以 ViLT `v0.3.0` 为推荐版本。BEiT-3 上游实现采用 MIT 许可证；本项目固定 TorchScale commit，并在使用前校验 Base 权重和 SentencePiece 文件的 SHA-256。详见 [BEiT-3 实验协议](docs/TRAINING_PROTOCOL.md)和[模型卡](MODEL_CARD.md#experimental-candidate-beit-3-base)。
+BEiT-3 A 已完成训练，最终验证成绩为 74.22，低于原定 75.00。B 组数据对照与 C 组独立训练复现尚未执行。本项目固定 TorchScale 版本，并校验通用 Base 权重及 SentencePiece 文件的 SHA-256。见[训练协议](docs/TRAINING_PROTOCOL.md)和[模型卡](MODEL_CARD.md#experimental-candidate-beit-3-base)。
 
 Install the optional dependencies and run the two-GPU capacity and save/resume gates before a full run:
 
@@ -388,6 +395,19 @@ python infer.py \
   --question "What is in the image?" \
   --topk 5
 ```
+
+## VQA Studio for macOS / 原生 macOS 应用
+
+VQA Studio is a SwiftUI app that keeps the model loaded in a local Python worker. It manages an image library, keeps question drafts and history, and exports conversations. It requires macOS 14+, a compatible Swift toolchain, an installed project Python environment, and a trusted checkpoint.
+
+VQA Studio 使用 SwiftUI，通过本地 Python 进程复用模型，支持图片管理、问题草稿、问答历史和会话导出。需要 macOS 14+、兼容的 Swift 工具链、已安装项目依赖的 Python 环境和可信权重。
+
+```sh
+python scripts/build_macos_app.py --python /path/to/project-env/bin/python
+open "VQA Studio.app"
+```
+
+See the [desktop build and settings guide](macos/README.md). The local build does not bundle Python, model weights or datasets. / 见[桌面应用构建与配置指南](macos/README.md)。本地构建不包含 Python、权重或数据集。
 
 ## Web Demo / Web 演示
 

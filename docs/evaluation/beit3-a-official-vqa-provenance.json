@@ -1,0 +1,89 @@
+{
+  "source": "multimodal-vqa-finetune-artifacts.tar.gz",
+  "source_size_bytes": 4326100399,
+  "source_sha256": "9c6e123f1b9d3f0952670d207b756b8d7a83a8c5adedd50f0f68187e65cc5f64",
+  "tar_gzip_verified": true,
+  "kaggle_status": "COMPLETE",
+  "kaggle_version": 4,
+  "restored_from": {
+    "epoch": 10,
+    "batch": 9488,
+    "step": 31949
+  },
+  "world_size": 2,
+  "code_commit": "5b1fc319220be1080dc6d5dd30162898334c7b81",
+  "runtime_config_sha256": "84c55cc9633e4b2d44207bd3045af8b6884c7f86a0e3d12b443e8c9267d29e55",
+  "training_patch_sha256": "5cec41091915e39d22efbd1b441cc394a5413d600fc620ff0fe8fe50584f3fbc",
+  "data_fingerprint": "fab55f1bef9da96f5f379727e2c2d2f8fdecff2b054a7c426905e54eb77e22e4",
+  "completed_epochs": 10,
+  "checkpoints": {
+    "best.pt": {
+      "epoch": 9,
+      "global_step": 30763,
+      "epoch_complete": true,
+      "size_bytes": 2772577872,
+      "sha256": "31951eb590d1fa4df887deac5c43b90ee5b478126c401ce43476911c1370bab7",
+      "inner_crc": true,
+      "optimizer_scheduler_amp_two_rank_state_verified": true,
+      "learning_rates": [
+        3.0000000000000003e-13,
+        3.0000000000000003e-13,
+        5.9999999999999995e-12,
+        5.9999999999999995e-12
+      ]
+    },
+    "latest.pt": {
+      "epoch": 10,
+      "global_step": 34181,
+      "epoch_complete": true,
+      "size_bytes": 2772583210,
+      "sha256": "033a2dd58e48cf32de1c3375857ecfdca3cfbb411824bcfba6d283a02c609ef2",
+      "inner_crc": true,
+      "optimizer_scheduler_amp_two_rank_state_verified": true,
+      "learning_rates": [
+        3.0000000000000003e-13,
+        3.0000000000000003e-13,
+        5.9999999999999995e-12,
+        5.9999999999999995e-12
+      ]
+    }
+  },
+  "history_sha256": "f2051b2651b6d171c161e6bbe4cfd008624c3c3d585ccccc1e6c31c120027a52",
+  "published_history_sha256": "2b800f9abf0976e1cfff9e949c78aea2248bba34c858acd08969e94a09dd1eee",
+  "published_history_line_endings": "LF",
+  "curve_sha256": "9b9ff9c42e731b16a7e9c72209e5350bae85a13400093208b8bf1265bd8b9128",
+  "curve_pixels": [
+    2400,
+    720
+  ],
+  "runner_log_sha256": "49bdba4c7ce77c5b4b5630466b7a6f39ae183e9c8a343a4776d07b8ad9f0a7f0",
+  "best_unchanged_from_resume_dataset": true,
+  "questions_sha256": "f34d9c9909dea76700d361baddd63dd47b4494945097459b542d9fe840244811",
+  "annotations_sha256": "0564650e712b34c246e4ad142894692bf2e45dee8e9cc6ebb2cedbe85731c4bf",
+  "predictions_sha256": "46be6293197e3be1a9fa69021931262820f784619d0eef7e3b8be1169156cf8d",
+  "exact_question_id_coverage": 214354,
+  "kaggle_metrics_sha256": "f2cf7c711fbd6e14809c0a7170fa86edd473897463c0b273905c55791da8e7a8",
+  "resources": {
+    "samples": 591,
+    "oom_events": 0,
+    "oom_kill_events": 0
+  },
+  "verification_date": "2026-11-23",
+  "evaluation_split": "VQA v2 public val2014",
+  "evaluator": {
+    "repository": "https://github.com/GT-Vision-Lab/VQA",
+    "commit": "a013f0043c1e2cdc995922dfe257f7149aa9af06",
+    "python3_conversion": "scripts/prepare_official_vqa_toolkit.py",
+    "entrypoint": "scripts/run_official_vqa_eval.py",
+    "local_runs": 2,
+    "local_outputs_byte_identical": true,
+    "all_cloud_metrics_match": true,
+    "local_output_sha256": "f2cf7c711fbd6e14809c0a7170fa86edd473897463c0b273905c55791da8e7a8"
+  },
+  "result": {
+    "overall": 74.22,
+    "target": 75.0,
+    "target_met": false,
+    "independent_training_replication_completed": false
+  }
+}

@@ -129,15 +129,18 @@ leaderboard 或跨项目 SOTA 声明。
 | Checkpoint | Hard accuracy | Internal VQA | Official VQA val (%) | Status |
 | --- | ---: | ---: | ---: | --- |
 | ViLT seed 42 (`v0.3.0`) | **0.6126** | **0.7101** | **68.42** | Recommended engineering checkpoint |
+| BEiT-3 Base A (epoch 9 of 10) | 0.6667 | 0.7546 | **74.22** | Highest verified validation score; not a weight release |
 | Staged cross-attention (`v0.2.0`) | 0.5239 | 0.6233 | not evaluated | Archived comparison release |
 | Strong cross-attention ablation | 0.4967 | 0.5955 | not evaluated | Not promoted |
 | Legacy checkpoint (`v0.1.0`) | 0.4775 | not recorded | not evaluated | Archived |
 
 ## Experimental Candidate: BEiT-3 Base
 
-This section describes an implemented but not yet trained candidate. It has no validation result, release checkpoint, or promotion claim. The ViLT `v0.3.0` checkpoint remains the recommended model.
+BEiT-3 A completed 10 epochs on dual T4. The selected epoch-9 checkpoint (step 30763) scored **74.22** on all 214,354 public validation questions in two matching official-toolkit runs: yes/no 89.95, other 66.39, number 58.60. Epoch 10 (step 34181) tied; its `latest.pt` is the terminal training state, not the selected model. BEiT-3 A's internal metrics cover 210,834 vocabulary-covered examples. The 75.00 target was not met; no independent-seed training was run. ViLT `v0.3.0` remains the recommended downloadable checkpoint.
 
-本节说明已接入工程、但尚未完成训练的候选模型。当前没有验证指标、发布权重或晋升结论；ViLT `v0.3.0` 仍是推荐模型。
+BEiT-3 A 在双 T4 上完成 10 轮。第 9 轮最佳权重（step 30763）在 214,354 道公开验证题上两次官方工具复评均为 **74.22**：yes/no 89.95、other 66.39、number 58.60。第 10 轮（step 34181）同分，`latest.pt` 保留最终训练状态，不是最佳权重。BEiT-3 A 内部指标覆盖答案词表内的 210,834 条样本。原定 75.00 未达到，也未进行独立 seed 训练；推荐下载权重仍为 ViLT `v0.3.0`。
+
+[Official metrics / 官方指标](docs/evaluation/beit3-a-official-vqa-metrics.json) · [Provenance and checkpoint hashes / 核验记录与权重哈希](docs/evaluation/beit3-a-official-vqa-provenance.json)
 
 | Property | Value |
 | --- | --- |

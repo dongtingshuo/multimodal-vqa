@@ -436,7 +436,7 @@ The next model-family experiment is an optional BEiT-3 Base VQA classifier. The 
 
 下一阶段模型路线为可选的 BEiT-3 Base VQA 分类器。实现固定 TorchScale 源码 commit，使用通用预训练 Base 权重和官方 SentencePiece tokenizer，按预期文件大小与 SHA-256 校验资源，并拒绝不完整的骨干参数加载。VQA 分类头和图像预处理遵循上游 VQAv2 实现。项目答案词表仅由规范化后的 VQA v2 训练答案构建；全部官方验证问题只用于评测。
 
-At implementation time, a local CPU integration check loaded 100% of the expected pretrained backbone parameters (12/12 encoder layers), ran a finite 224 px forward pass, and verified that positional embeddings interpolate to the 480 px grid in FP32. The Kaggle runner and notebook now automatically benchmark candidate micro-batches, generate and reuse a global-batch-preserving runtime config, run the distributed checkpoint smoke, and save a data-sized time estimate. These new GPU gates have **not** been run: this local environment has no CUDA devices. No BEiT-3 training, validation score, Kaggle run, or performance improvement is claimed in this report.
+The initial CPU integration check loaded 100% of the expected pretrained backbone parameters (12/12 encoder layers), ran a finite 224 px forward pass, and verified that positional embeddings interpolate to the 480 px grid in FP32. Later dual-T4 runs passed the distributed save/restore checks and completed Experiment A.
 
 实现阶段的本地 CPU 集成检查已加载预期预训练骨干参数的 100%（12/12 层），完成有限值 224 px 前向，并验证位置编码可在 FP32 下插值到 480 px 网格。Kaggle runner 和 notebook 会自动测量候选 micro-batch、生成并复用保持全局 batch 的运行配置、执行分布式 checkpoint smoke，并保存按数据规模计算的耗时估算。该段记录实现时的本地检查；后续 Kaggle 执行证据如下，不代表已取得验证分数或性能提升。
 
@@ -486,6 +486,25 @@ The aspirational target is at least `75.00` official VQA validation overall for 
 目标为优选 A/B 官方 VQA 验证 overall 至少 `75.00`，并要求独立 C 复现至少 `74.50`。这属于验收目标，不是结果承诺。每个候选模型必须导出 question ID 与官方验证集 214,354 条完全一致的预测，并通过上游 VQA Evaluation Toolkit 两次且结果相同。报告 overall、答案类型指标、数据/配置/来源指纹和全部产物。未达标时如实记录测量结果和失败证据，不得以内部准确率、部分验证、集成结果或更换数据划分代替。所有门槛通过前，当前 `68.42` 的 ViLT Release 仍为推荐版本。
 
 下载的 Version 34 结果目录中 `best.pt` 为 0 字节。最终选用已验证的 Version 33 epoch 4 checkpoint 恢复权重，其配置和 Version 34 选中指标一致；SHA-256 为 `947551915da46f6225f2574c217728b8125491608fa55a54aabd8625fd5561c5`。V34 epoch 6 的 `latest.pt` 是续训状态，并非选中的最佳 checkpoint。评测数据指纹：questions SHA-256 `f34d9c9909dea76700d361baddd63dd47b4494945097459b542d9fe840244811`；annotations SHA-256 `0564650e712b34c246e4ad142894692bf2e45dee8e9cc6ebb2cedbe85731c4bf`；predictions SHA-256 `febdf25cc960dd509e823af025d367020ddfcc328ab74dacb38c4a67ccf886b1`。
+## BEiT-3 A Final Result / BEiT-3 A 最终结果
+
+The VQA-only, seed-42 run finished all 10 epochs on two Tesla T4 GPUs. The last session restored epoch 10 at batch 9,488, update 31,949, then completed all training and validation. The runner scored both epoch 9 and epoch 10 at 74.22, retaining the earlier checkpoint as best. Two local runs of the pinned upstream VQA toolkit agreed with each other and Kaggle on every metric. Question, annotation and prediction IDs matched exactly across all 214,354 public validation questions.
+
+仅使用 VQA v2 训练数据的 seed-42 实验在两张 Tesla T4 上完成了 10 轮。最后一段从第 10 轮 batch 9,488、更新 31,949 恢复，并完成训练和全量验证。第 9、10 轮评分均为 74.22，保留较早的最佳权重。固定版本的上游 VQA 工具在本地复评两次，所有指标与 Kaggle 一致。全部 214,354 道公开验证题的问题、标注与预测 ID 精确匹配。
+
+| Artifact / 产物 | Epoch / 轮次 | Update / 更新步 | VQA val overall / 总分 |
+| --- | ---: | ---: | ---: |
+| Selected checkpoint / 最佳权重 | 9 | 30,763 | **74.22** |
+| Terminal checkpoint / 最终训练状态 | 10 | 34,181 | 74.22 (runner / 训练程序) |
+
+The selected checkpoint scored 58.60 on number, 66.39 on other, and 89.95 on yes/no. Overall is 5.80 points above the released ViLT and 0.78 below the original 75.00 goal. Epoch 10 reduced training loss from 2.10055 to 2.08157, but validation accuracy stayed around 0.66667 and validation loss around 3.27562. The saved backbone and head learning rates were 3e-13 and 6e-12, respectively. The plateau is consistent with the unchanged schedule; no ablation isolates its cause.
+
+最佳权重的 number、other、yes/no 分别为 58.60、66.39、89.95。总分较已发布 ViLT 高 5.80 分，距原定 75.00 差 0.78 分。第 10 轮训练损失从 2.10055 降到 2.08157，验证准确率仍约 0.66667，验证损失仍约 3.27562。保存的骨干和分类头学习率分别为 3e-13 和 6e-12。指标停滞与原调度下的表现一致，但没有消融实验确认原因。
+
+Experiment A is closed at the verified score. B and C have not been run; no hidden test-server result or independent training replication is claimed. ViLT remains the recommended downloadable release. / 实验 A 以核验成绩收尾。B 和 C 未执行，不宣称隐藏测试服务器成绩或独立训练复现；推荐下载仍为 ViLT。
+
+[Official metrics / 官方分项](evaluation/beit3-a-official-vqa-metrics.json) · [Provenance / 核验记录](evaluation/beit3-a-official-vqa-provenance.json) · [Epoch history / 逐轮指标](evaluation/beit3-a-training-history.csv) · [Training curves / 训练曲线](evaluation/beit3-a-training-curves.png)
+
 ## Current Limitations / 当前限制
 
 The full answer-vocabulary coverage and question-type error profile for the released ViLT checkpoint are documented in [VQA validation diagnostics / VQA 验证集诊断](evaluation/v0.3.0-vilt-diagnostics.md). The analysis confirms that overall vocabulary coverage is high, while performance is notably weaker for numeric, name, time, and explanatory questions.
