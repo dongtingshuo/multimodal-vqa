@@ -18,6 +18,11 @@
 - 使构建后端与 SPDX 许可证元数据要求一致。
 - 增加保守的依赖更新自动化。漏洞审计识别出历史 Gradio/Starlette Web 依赖组合，但其联动大版本迁移将延后，直至权重、演示与训练运行时共同通过兼容性验证。
 
+## beit3-a-v1 / BEiT-3 A Inference Release
+
+- Published the recommended epoch-9 BEiT-3 A inference checkpoint with public validation overall 74.22. The FP32 export preserves the original weight tensors exactly and includes the tokenizer and checksum manifest. The ViLT release and Python package version are unchanged.
+- 发布首选 BEiT-3 A 第 9 轮推理权重，公开验证总分 74.22。FP32 导出保留原始权重张量，附带分词器及校验清单。ViLT 发布与 Python 包版本保持不变。
+
 ## 0.3.0 / ViLT Full-Validation Release
 
 Released on 2026-07-12. / 发布于 2026-07-12。

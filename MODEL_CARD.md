@@ -2,9 +2,9 @@
 
 ## Overview / 概览
 
-[BEiT-3 Base A](#recommended-model-beit-3-base-a) is the recommended model at **74.22** on VQA v2 public validation. Its trained weights are not publicly hosted. ViLT `v0.3.0` (68.42) remains the public fallback.
+[BEiT-3 Base A](#recommended-model-beit-3-base-a) is the recommended model at **74.22** on VQA v2 public validation. Get its inference package from [Release `beit3-a-v1`](https://github.com/dongtingshuo/multimodal-vqa/releases/tag/beit3-a-v1). ViLT `v0.3.0` (68.42) remains the fallback.
 
-[BEiT-3 Base A](#recommended-model-beit-3-base-a) 是首选模型，VQA v2 公开验证分数为 **74.22**。训练权重暂无公开下载，ViLT `v0.3.0`（68.42）保留为公开下载备选。
+[BEiT-3 Base A](#recommended-model-beit-3-base-a) 是首选模型，VQA v2 公开验证分数为 **74.22**。从 [Release `beit3-a-v1`](https://github.com/dongtingshuo/multimodal-vqa/releases/tag/beit3-a-v1) 下载推理包。ViLT `v0.3.0`（68.42）保留为备选。
 
 ### Public ViLT fallback / 公开下载备选 ViLT
 
@@ -130,7 +130,7 @@ leaderboard 或跨项目 SOTA 声明。
 
 | Checkpoint | Hard accuracy | Internal VQA | Official VQA val (%) | Status |
 | --- | ---: | ---: | ---: | --- |
-| BEiT-3 Base A (epoch 9 of 10) | **0.6667** | **0.7546** | **74.22** | Recommended model; no public download |
+| BEiT-3 Base A (epoch 9 of 10) | **0.6667** | **0.7546** | **74.22** | Recommended inference release |
 | ViLT seed 42 (`v0.3.0`) | 0.6126 | 0.7101 | 68.42 | Public fallback |
 | Staged cross-attention (`v0.2.0`) | 0.5239 | 0.6233 | not evaluated | Archived comparison release |
 | Strong cross-attention ablation | 0.4967 | 0.5955 | not evaluated | Not promoted |
@@ -156,8 +156,9 @@ BEiT-3 A 在双 T4 上完成 10 轮。首选的第 9 轮权重（step 30763）�
 | TorchScale source | [`4d1e0e82e5adf86dd424f1463192635b73fc8efc`](https://github.com/microsoft/torchscale/tree/4d1e0e82e5adf86dd424f1463192635b73fc8efc) |
 | Pretrained weights | [`beit3_base_patch16_224.pth`](https://github.com/addf400/files/releases/download/beit3/beit3_base_patch16_224.pth), 554,351,015 bytes |
 | Upstream pretrained weights SHA-256 | `12ebc3d487f418d4f0f000d09719edfe7dcc89079da427f5580a7fb86ee3943a` |
-| Recommended trained checkpoint | `best.pt`, epoch 9/update 30763, format v4, 2,772,577,872 bytes; not publicly hosted |
-| Recommended trained checkpoint SHA-256 | `31951eb590d1fa4df887deac5c43b90ee5b478126c401ce43476911c1370bab7` |
+| Released checkpoint | `best.pt`, epoch 9/update 30763, FP32 inference export, 924,193,528 bytes |
+| Released checkpoint SHA-256 | `8d40a588cdedb124cfe48b05cdc726fb479ae7f0830888ab0a4c32d49e2d9ffd` |
+| Original training checkpoint SHA-256 | `31951eb590d1fa4df887deac5c43b90ee5b478126c401ce43476911c1370bab7` |
 | Tokenizer SHA-256 | `6f5e2fefcf793761a76a6bfb8ad35489f9c203b25557673284b6d032f41043f4` |
 | Training plan | A: VQA v2 only; B: screened Visual Genome QA; C: independent seed-123 replication |
 | Status | A completed; official-toolkit result verified twice. B and C have not run. |
@@ -166,9 +167,9 @@ Upstream VQAv2 preprocessing, answer normalization, and the classification-head 
 
 上游 VQAv2 图像预处理、答案规范化和分类头结构参考 Microsoft 的 [BEiT-3 VQAv2 指南](https://github.com/microsoft/unilm/blob/master/beit3/get_started/get_started_for_vqav2.md)及[官方实现](https://github.com/microsoft/unilm/tree/master/beit3)。Base 权重从上游指向的发布地址下载，文件大小或 SHA-256 不匹配时会拒绝加载。Kaggle 预检会测量每卡 batch 1/2/4/8、生成保持全局 batch 128 的运行配置、执行真实分布式 checkpoint 往返验证，并按吞吐记录审慎的 epoch/会话估算。本地集成测试已加载全部 12 层 encoder，并检查 480 px 位置编码插值；这些都只是实现检查，不代表训练结果。
 
-The recommendation is based on the highest verified full-validation score. This does not satisfy the original research targets or replace the existing downloadable release. Internal metrics, partial exports, and repeated evaluation of one model cannot substitute for independent training replication.
+The recommendation is based on the highest verified full-validation score. The inference export contains the exact 497 FP32 tensors from the selected checkpoint, with no optimizer or resume state. Publication does not imply the original research targets were met or replace the prior ViLT release. Repeated evaluation of one model is not independent training replication.
 
-首选模型依据已核验的最高全量验证分数确定。这不代表原定研究目标已达成，也不替换现有可下载版本。内部指标、部分预测和同一权重的重复评测均不能替代独立训练复现。
+首选模型依据已核验的最高全量验证分数确定。推理包原样保留选中权重的 497 个 FP32 张量，不包含优化器或续训状态。发布不代表原研究目标已达成，也不覆盖之前的 ViLT 版本。同一权重的重复评测不能替代独立训练复现。
 
 ## Runtime Requirements / 运行要求
 

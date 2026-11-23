@@ -33,7 +33,7 @@ Maintain a reproducible PyTorch visual question answering system for VQA v2.0 an
 - Training data: VQA v2.0 questions/annotations plus COCO 2014 `train2014` and `val2014` images. Keep datasets outside Git.
 - Kaggle COCO sources: when no complete image mount is available, the runner downloads the official `train2014.zip` and `val2014.zip` from COCO's S3 host into `/tmp`; the download is resumable within a running session.
 - Optional private pack kernels: `dongtingshuo/multimodal-vqa-coco-train-pack` and `dongtingshuo/multimodal-vqa-coco-val-pack`. Their outputs are not attached to the main training kernel because Kaggle worker-side input mounts proved intermittent.
-- Recommended model: BEiT-3 Base A, epoch 9/update 30763, the highest verified public-validation score (74.22 over 214,354 questions). The VQA-only run used generic pretrained weights and finished 10 epochs on dual T4. The 75.00 research target was not met; B and C were not run. See `docs/evaluation/beit3-a-official-vqa-provenance.json` and `docs/EXPERIMENT_REPORT.md`.
+- Recommended model: BEiT-3 Base A, epoch 9/update 30763, the highest verified public-validation score (74.22 over 214,354 questions). Public inference asset: GitHub Release `beit3-a-v1`; see `docs/releases/beit3-a-v1.md`. The VQA-only run used generic pretrained weights and finished 10 epochs on dual T4. The 75.00 research target was not met; B and C were not run.
 - Public fallback: ViLT seed 42, release `v0.3.0`, official validation score 68.42. Its download script and defaults remain compatible.
 
 ## Runtime and Tests / 运行与测试
@@ -46,7 +46,7 @@ Maintain a reproducible PyTorch visual question answering system for VQA v2.0 an
 
 ## Current Status and Decisions / 当前状态与决策
 
-- Experiment A is closed at 74.22. The source commit, recovery patch digest, dataset/checkpoint hashes, and two matching official-toolkit results are recorded in public provenance. Recommend the epoch-9 `best.pt` over the completed epoch-10 `latest.pt`. The BEiT-3 weight is not publicly hosted; recommend by validation score without changing the original experiment targets or ViLT release artifacts.
+- Experiment A is closed at 74.22. The source commit, recovery patch digest, dataset/checkpoint hashes, and two matching official-toolkit results are recorded in public provenance. The public FP32 inference export retains all 497 tensors of the epoch-9 `best.pt` bit-for-bit and omits optimizer, scheduler, and resume state. Both original training checkpoints and the ViLT release are unchanged.
 - VQA Studio source, icon sources, packaging and test entry points are versioned; locally compiled app bundles, personal library data and development outputs are not distributed in Git.
 
 - Directly attaching the raw COCO Dataset and attaching packed Notebook outputs both produced intermittent worker-side mount failures before Python startup. The main training kernel therefore has no `dataset_sources` or `kernel_sources`.
@@ -79,5 +79,5 @@ Maintain a reproducible PyTorch visual question answering system for VQA v2.0 an
 ## Prioritized TODO / 优先事项
 
 1. Preserve the completed A experiment as the comparison baseline. B (screened Visual Genome) and C (independent seed) remain optional future experiments; do not extend the completed A schedule.
-2. Keep benchmark-based recommendations separate from public downloads; publish a downloadable BEiT-3 asset only as a separate release task.
+2. Maintain separate checksums for inference packages and original training checkpoints. Keep optimizer and resume state out of public inference assets.
 3. Keep the macOS build and local inference workflow reproducible. Treat a notarized standalone distribution as a separate release task.

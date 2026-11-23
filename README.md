@@ -18,9 +18,9 @@ A PyTorch visual question answering system for VQA v2.0 and COCO 2014, with repr
 | Staged cross-attention checkpoint (`v0.2.0`) | Archived comparison release / 历史对照版本 | 0.5239 | 0.6233 | Not evaluated |
 | Legacy checkpoint (`v0.1.0`) | Archived release / 历史发布 | 0.4775 | Not recorded | Not evaluated |
 
-BEiT-3 A is the recommended model because its selected epoch-9 checkpoint scored **74.22** over all 214,354 public validation questions in two matching runs of the official toolkit, **5.80 points** above ViLT. This is not a hidden test-server result. See [metrics](docs/evaluation/beit3-a-official-vqa-metrics.json), [provenance](docs/evaluation/beit3-a-official-vqa-provenance.json), and the [experiment report](docs/EXPERIMENT_REPORT.md). The BEiT-3 checkpoint is not publicly hosted; ViLT is the public fallback.
+BEiT-3 A is the recommended model because its selected epoch-9 checkpoint scored **74.22** over all 214,354 public validation questions in two matching runs of the official toolkit, **5.80 points** above ViLT. This is not a hidden test-server result. See the [model release](https://github.com/dongtingshuo/multimodal-vqa/releases/tag/beit3-a-v1), [metrics](docs/evaluation/beit3-a-official-vqa-metrics.json), and [provenance](docs/evaluation/beit3-a-official-vqa-provenance.json). ViLT remains a public fallback.
 
-首选 BEiT-3 A：第 9 轮最佳权重在全部 214,354 道公开验证题上经官方工具两次复评均为 **74.22**，较 ViLT 高 **5.80 分**。这不是隐藏测试服务器成绩。见[指标](docs/evaluation/beit3-a-official-vqa-metrics.json)、[核验记录](docs/evaluation/beit3-a-official-vqa-provenance.json)和[实验报告](docs/EXPERIMENT_REPORT.md)。BEiT-3 权重尚未公开托管，可下载的备选模型是 ViLT。
+首选 BEiT-3 A：第 9 轮最佳权重在全部 214,354 道公开验证题上经官方工具两次复评均为 **74.22**，较 ViLT 高 **5.80 分**。这不是隐藏测试服务器成绩。见[模型发布页](https://github.com/dongtingshuo/multimodal-vqa/releases/tag/beit3-a-v1)、[指标](docs/evaluation/beit3-a-official-vqa-metrics.json)和[核验记录](docs/evaluation/beit3-a-official-vqa-provenance.json)。ViLT 仍可公开下载作为备选。
 
 Internal metrics cover 210,834 examples for BEiT-3 A and 209,608 for ViLT. Cross-model comparisons use the official full-split scores. / BEiT-3 A 和 ViLT 的内部指标分别覆盖 210,834 和 209,608 条样本；跨模型比较使用全量官方协议分数。
 
@@ -197,13 +197,13 @@ The downloader resumes `.part` files and verifies known archive sizes, checksums
 
 ### Recommended: BEiT-3 A / 首选：BEiT-3 A
 
-Use the verified epoch-9 `best.pt` (update 30,763) from the experiment artifacts, not the epoch-10 `latest.pt`. No public download is available for this weight. Keep its `beit3.spm` next to it and verify both files against the [model card](MODEL_CARD.md#recommended-model-beit-3-base-a).
+Download the [BEiT-3 inference bundle](https://github.com/dongtingshuo/multimodal-vqa/releases/download/beit3-a-v1/beit3-a-vqa-v2-inference.zip) and the [SHA-256 checksum](https://github.com/dongtingshuo/multimodal-vqa/releases/download/beit3-a-v1/SHA256SUMS.txt). The 926 MB ZIP contains the verified epoch-9 `best.pt` (update 30,763) and `beit3.spm`. This is an FP32 inference package, not a training-resume checkpoint. See the [release notes](docs/releases/beit3-a-v1.md).
 
-使用实验产物中的第 9 轮 `best.pt`（更新步 30,763），不要用第 10 轮 `latest.pt`。该权重暂无公开下载。将配套的 `beit3.spm` 与权重放在同一目录，按[模型卡](MODEL_CARD.md#recommended-model-beit-3-base-a)校验。
+下载 [BEiT-3 推理包](https://github.com/dongtingshuo/multimodal-vqa/releases/download/beit3-a-v1/beit3-a-vqa-v2-inference.zip)和 [SHA-256 校验文件](https://github.com/dongtingshuo/multimodal-vqa/releases/download/beit3-a-v1/SHA256SUMS.txt)。ZIP 约 926 MB，包含已核验的第 9 轮 `best.pt`（更新步 30,763）及 `beit3.spm`。这是 FP32 推理包，不能用于断点续训。见[发布说明](docs/releases/beit3-a-v1.md)。
 
 ```bash
 python -m pip install -e '.[beit3]'
-python infer.py --checkpoint /path/to/beit3-a/best.pt --device cpu \
+python infer.py --checkpoint /path/to/beit3-a-vqa-v2/best.pt --device cpu \
   --image /path/to/image.jpg --question "What is in the image?"
 ```
 
