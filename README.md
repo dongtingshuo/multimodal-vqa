@@ -12,15 +12,15 @@ A PyTorch visual question answering system for VQA v2.0 and COCO 2014, with repr
 
 | Track | Status | Hard accuracy | Internal VQA | Official VQA val (%) |
 | --- | --- | ---: | ---: | ---: |
-| ViLT seed-42 checkpoint (`v0.3.0`) | Recommended engineering release / 推荐工程版本 | **0.6126** | **0.7101** | **68.42** |
+| BEiT-3 Base A (best: epoch 9 of 10) | **Recommended model / 首选模型** | **0.6667** | **0.7546** | **74.22** |
+| ViLT seed-42 checkpoint (`v0.3.0`) | Public fallback / 公开下载备选 | 0.6126 | 0.7101 | 68.42 |
 | ViLT T4x2 continuation (Kaggle V34) | Evaluated experiment; not promoted / 已评测实验；未晋升 | 0.6084 | 0.7067 | 68.08 |
-| BEiT-3 Base A (best: epoch 9 of 10) | Highest verified validation score; experimental weights / 已核验最高验证分；实验权重 | 0.6667 | 0.7546 | **74.22** |
 | Staged cross-attention checkpoint (`v0.2.0`) | Archived comparison release / 历史对照版本 | 0.5239 | 0.6233 | Not evaluated |
 | Legacy checkpoint (`v0.1.0`) | Archived release / 历史发布 | 0.4775 | Not recorded | Not evaluated |
 
-BEiT-3 A completed 10 epochs. The selected epoch-9 checkpoint scored **74.22** over all 214,354 public validation questions in two matching runs of the official toolkit, **5.80 points** above ViLT. This is not a hidden test-server result. See [metrics](docs/evaluation/beit3-a-official-vqa-metrics.json), [provenance](docs/evaluation/beit3-a-official-vqa-provenance.json), and the [experiment report](docs/EXPERIMENT_REPORT.md). ViLT remains the recommended downloadable release.
+BEiT-3 A is the recommended model because its selected epoch-9 checkpoint scored **74.22** over all 214,354 public validation questions in two matching runs of the official toolkit, **5.80 points** above ViLT. This is not a hidden test-server result. See [metrics](docs/evaluation/beit3-a-official-vqa-metrics.json), [provenance](docs/evaluation/beit3-a-official-vqa-provenance.json), and the [experiment report](docs/EXPERIMENT_REPORT.md). The BEiT-3 checkpoint is not publicly hosted; ViLT is the public fallback.
 
-BEiT-3 A 已完成 10 轮。第 9 轮最佳权重在全部 214,354 道公开验证题上经官方工具两次复评均为 **74.22**，较 ViLT 高 **5.80 分**。这不是隐藏测试服务器成绩。见[指标](docs/evaluation/beit3-a-official-vqa-metrics.json)、[核验记录](docs/evaluation/beit3-a-official-vqa-provenance.json)和[实验报告](docs/EXPERIMENT_REPORT.md)。可下载的推荐版本仍为 ViLT。
+首选 BEiT-3 A：第 9 轮最佳权重在全部 214,354 道公开验证题上经官方工具两次复评均为 **74.22**，较 ViLT 高 **5.80 分**。这不是隐藏测试服务器成绩。见[指标](docs/evaluation/beit3-a-official-vqa-metrics.json)、[核验记录](docs/evaluation/beit3-a-official-vqa-provenance.json)和[实验报告](docs/EXPERIMENT_REPORT.md)。BEiT-3 权重尚未公开托管，可下载的备选模型是 ViLT。
 
 Internal metrics cover 210,834 examples for BEiT-3 A and 209,608 for ViLT. Cross-model comparisons use the official full-split scores. / BEiT-3 A 和 ViLT 的内部指标分别覆盖 210,834 和 209,608 条样本；跨模型比较使用全量官方协议分数。
 
@@ -28,9 +28,9 @@ The ViLT run completed through the configured early-stopping rule at epoch 7, se
 
 ViLT 任务已按配置在 epoch 7 触发早停，最佳权重来自 epoch 5，并已导出全部 214,354 条验证预测。官方 VQA Evaluation Toolkit 在 VQA v2 验证标注上的得分为 `68.42`。这是采用官方协议的本地验证结果，不是 test-dev/test-standard leaderboard 提交成绩。
 
-Kaggle V34 continued the same ViLT run from epoch 4 and stopped after epoch 6 without improving its selected validation metrics. Its official VQA v2 validation score is `68.08`, 0.34 percentage points below the recommended checkpoint, so it was not promoted and does not replace the `v0.3.0` checkpoint. See the [full experiment report](docs/EXPERIMENT_REPORT.md) and [complete official metrics](docs/evaluation/kaggle-v34-official-vqa-metrics.json).
+Kaggle V34 continued the same ViLT run from epoch 4 and stopped after epoch 6. Its official VQA v2 validation score is `68.08`, 0.34 percentage points below ViLT `v0.3.0`, so it did not replace that release. See the [full experiment report](docs/EXPERIMENT_REPORT.md) and [complete official metrics](docs/evaluation/kaggle-v34-official-vqa-metrics.json).
 
-Kaggle V34 从 epoch 4 继续同一 ViLT 实验，并在 epoch 6 早停，验证指标未超过已有最佳值。其官方 VQA v2 验证分数为 `68.08`，比当前推荐 checkpoint 低 0.34 个百分点，因此不予晋升，也不会替换 `v0.3.0` 权重。详见[完整实验报告](docs/EXPERIMENT_REPORT.md)和[官方评测分项指标](docs/evaluation/kaggle-v34-official-vqa-metrics.json)。
+Kaggle V34 从第 4 轮续训，并在第 6 轮早停。官方 VQA v2 验证分数为 `68.08`，比 ViLT `v0.3.0` 低 0.34 分，未替换该版本的权重。详见[完整实验报告](docs/EXPERIMENT_REPORT.md)和[官方评测分项指标](docs/evaluation/kaggle-v34-official-vqa-metrics.json)。
 
 ## Core Capabilities / 核心能力
 
@@ -195,7 +195,23 @@ The downloader resumes `.part` files and verifies known archive sizes, checksums
 
 ## Trained Checkpoint / 已训练模型
 
-Download and verify the recommended `v0.3.0` checkpoint / 下载并校验推荐的 `v0.3.0` 权重：
+### Recommended: BEiT-3 A / 首选：BEiT-3 A
+
+Use the verified epoch-9 `best.pt` (update 30,763) from the experiment artifacts, not the epoch-10 `latest.pt`. No public download is available for this weight. Keep its `beit3.spm` next to it and verify both files against the [model card](MODEL_CARD.md#recommended-model-beit-3-base-a).
+
+使用实验产物中的第 9 轮 `best.pt`（更新步 30,763），不要用第 10 轮 `latest.pt`。该权重暂无公开下载。将配套的 `beit3.spm` 与权重放在同一目录，按[模型卡](MODEL_CARD.md#recommended-model-beit-3-base-a)校验。
+
+```bash
+python -m pip install -e '.[beit3]'
+python infer.py --checkpoint /path/to/beit3-a/best.pt --device cpu \
+  --image /path/to/image.jpg --question "What is in the image?"
+```
+
+The same checkpoint path can be used with `demo.py --checkpoint` or in VQA Studio Settings. The checkpoint supplies its model architecture and preprocessing. / 同一路径可用于 `demo.py --checkpoint` 或 VQA Studio 设置。模型结构和预处理由权重内嵌的配置提供。
+
+### Public Fallback: ViLT / 公开下载备选：ViLT
+
+The download script retrieves ViLT `v0.3.0`, not BEiT-3. / 下载脚本获取 ViLT `v0.3.0`，不是 BEiT-3。
 
 ```bash
 python scripts/download_checkpoint.py
@@ -248,9 +264,9 @@ python train.py --config configs/kaggle_vilt.yaml --device cuda --no-wandb
 
 ### Experimental BEiT-3 Route / BEiT-3 实验路线
 
-BEiT-3 A completed training at 74.22, below the original 75.00 target. The B data comparison and C independent training replication have not run. The project pins TorchScale and checks the generic Base checkpoint and SentencePiece model by SHA-256. See the [training protocol](docs/TRAINING_PROTOCOL.md) and [model card](MODEL_CARD.md#experimental-candidate-beit-3-base).
+BEiT-3 A completed training at 74.22, below the original 75.00 research target. The B data comparison and C independent training replication have not run. The project pins TorchScale and checks the generic Base checkpoint and SentencePiece model by SHA-256. See the [training protocol](docs/TRAINING_PROTOCOL.md) and [model card](MODEL_CARD.md#recommended-model-beit-3-base-a).
 
-BEiT-3 A 已完成训练，最终验证成绩为 74.22，低于原定 75.00。B 组数据对照与 C 组独立训练复现尚未执行。本项目固定 TorchScale 版本，并校验通用 Base 权重及 SentencePiece 文件的 SHA-256。见[训练协议](docs/TRAINING_PROTOCOL.md)和[模型卡](MODEL_CARD.md#experimental-candidate-beit-3-base)。
+BEiT-3 A 已完成训练，验证成绩为 74.22，低于原定 75.00 的研究目标。B 组数据对照与 C 组独立训练复现尚未执行。本项目固定 TorchScale 版本，并校验通用 Base 权重及 SentencePiece 文件的 SHA-256。见[训练协议](docs/TRAINING_PROTOCOL.md)和[模型卡](MODEL_CARD.md#recommended-model-beit-3-base-a)。
 
 Install the optional dependencies and run the two-GPU capacity and save/resume gates before a full run:
 
@@ -497,6 +513,6 @@ This project is released under the MIT License. See [LICENSE](LICENSE).
 
 ## Notes / 说明
 
-This repository implements a compact VQA classification pipeline for practical training, controlled evaluation, and local demonstration. Toy reports are not benchmarks. The recommended checkpoint has complete internal validation, full prediction export, and official-toolkit validation scoring. The reported `68.42` is not a test-dev/test-standard leaderboard submission. Full training requires large datasets and suitable GPU resources. It is not a reproduction of large-scale generative vision-language models such as BLIP, Flamingo, or LLaVA.
+This repository implements a compact VQA classification pipeline for practical training, controlled evaluation, and local demonstration. Toy reports are not benchmarks. The reported BEiT-3 `74.22` and ViLT `68.42` are public validation results, not test-dev/test-standard leaderboard submissions. Full training requires large datasets and suitable GPU resources. This is not a reproduction of large-scale generative vision-language models such as BLIP, Flamingo, or LLaVA.
 
-本工程实现的是一个面向实际训练、受控评估和本地演示的紧凑型 VQA 分类管线。玩具报告不是 benchmark。推荐权重已完成内部全量验证、全量预测导出和官方 toolkit 验证评分；`68.42` 不是 test-dev/test-standard leaderboard 提交成绩。全量训练需要大规模数据集和合适的 GPU 资源。本工程并非 BLIP、Flamingo、LLaVA 等大规模生成式视觉语言模型的复现。
+本工程实现的是一个面向实际训练、受控评估和本地演示的紧凑型 VQA 分类管线。玩具报告不是 benchmark。BEiT-3 的 `74.22` 和 ViLT 的 `68.42` 都是公开验证集结果，不是 test-dev/test-standard 榜单提交成绩。全量训练需要大规模数据集和合适的 GPU 资源。本工程并非 BLIP、Flamingo、LLaVA 等大规模生成式视觉语言模型的复现。

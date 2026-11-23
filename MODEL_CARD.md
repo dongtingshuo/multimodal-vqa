@@ -2,11 +2,13 @@
 
 ## Overview / 概览
 
-`multimodal-vqa` v0.3.0 provides a ViLT-based Visual Question Answering classifier trained on
-VQA v2 with COCO 2014 images. It is the repository's recommended engineering checkpoint.
+[BEiT-3 Base A](#recommended-model-beit-3-base-a) is the recommended model at **74.22** on VQA v2 public validation. Its trained weights are not publicly hosted. ViLT `v0.3.0` (68.42) remains the public fallback.
 
-`multimodal-vqa` v0.3.0 提供基于 ViLT 的视觉问答分类模型，使用 VQA v2 与 COCO 2014
-图像训练，是本仓库当前推荐的工程 checkpoint。
+[BEiT-3 Base A](#recommended-model-beit-3-base-a) 是首选模型，VQA v2 公开验证分数为 **74.22**。训练权重暂无公开下载，ViLT `v0.3.0`（68.42）保留为公开下载备选。
+
+### Public ViLT fallback / 公开下载备选 ViLT
+
+The following release details, training configuration and primary validation tables describe ViLT; BEiT-3 has its own section below. / 以下发布信息、训练配置和主要验证表对应 ViLT；BEiT-3 的详细信息见后文独立小节。
 
 - **Task / 任务**: open-ended Visual Question Answering
 - **Release / 发布**: [v0.3.0](https://github.com/dongtingshuo/multimodal-vqa/releases/tag/v0.3.0)
@@ -128,17 +130,17 @@ leaderboard 或跨项目 SOTA 声明。
 
 | Checkpoint | Hard accuracy | Internal VQA | Official VQA val (%) | Status |
 | --- | ---: | ---: | ---: | --- |
-| ViLT seed 42 (`v0.3.0`) | **0.6126** | **0.7101** | **68.42** | Recommended engineering checkpoint |
-| BEiT-3 Base A (epoch 9 of 10) | 0.6667 | 0.7546 | **74.22** | Highest verified validation score; not a weight release |
+| BEiT-3 Base A (epoch 9 of 10) | **0.6667** | **0.7546** | **74.22** | Recommended model; no public download |
+| ViLT seed 42 (`v0.3.0`) | 0.6126 | 0.7101 | 68.42 | Public fallback |
 | Staged cross-attention (`v0.2.0`) | 0.5239 | 0.6233 | not evaluated | Archived comparison release |
 | Strong cross-attention ablation | 0.4967 | 0.5955 | not evaluated | Not promoted |
 | Legacy checkpoint (`v0.1.0`) | 0.4775 | not recorded | not evaluated | Archived |
 
-## Experimental Candidate: BEiT-3 Base
+## Recommended Model: BEiT-3 Base A
 
-BEiT-3 A completed 10 epochs on dual T4. The selected epoch-9 checkpoint (step 30763) scored **74.22** on all 214,354 public validation questions in two matching official-toolkit runs: yes/no 89.95, other 66.39, number 58.60. Epoch 10 (step 34181) tied; its `latest.pt` is the terminal training state, not the selected model. BEiT-3 A's internal metrics cover 210,834 vocabulary-covered examples. The 75.00 target was not met; no independent-seed training was run. ViLT `v0.3.0` remains the recommended downloadable checkpoint.
+BEiT-3 A completed 10 epochs on dual T4. The recommended epoch-9 checkpoint (step 30763) scored **74.22** on all 214,354 public validation questions in two matching official-toolkit runs: yes/no 89.95, other 66.39, number 58.60. Epoch 10 (step 34181) tied; its `latest.pt` is the terminal training state, not the selected model. Internal metrics cover 210,834 vocabulary-covered examples. The 75.00 research target was not met, and no independent-seed training was run.
 
-BEiT-3 A 在双 T4 上完成 10 轮。第 9 轮最佳权重（step 30763）在 214,354 道公开验证题上两次官方工具复评均为 **74.22**：yes/no 89.95、other 66.39、number 58.60。第 10 轮（step 34181）同分，`latest.pt` 保留最终训练状态，不是最佳权重。BEiT-3 A 内部指标覆盖答案词表内的 210,834 条样本。原定 75.00 未达到，也未进行独立 seed 训练；推荐下载权重仍为 ViLT `v0.3.0`。
+BEiT-3 A 在双 T4 上完成 10 轮。首选的第 9 轮权重（step 30763）在 214,354 道公开验证题上两次官方工具复评均为 **74.22**：yes/no 89.95、other 66.39、number 58.60。第 10 轮（step 34181）同分，`latest.pt` 保留最终训练状态，不是最佳权重。内部指标覆盖词表内的 210,834 条样本。原定 75.00 的研究目标未达到，也未进行独立 seed 训练。
 
 [Official metrics / 官方指标](docs/evaluation/beit3-a-official-vqa-metrics.json) · [Provenance and checkpoint hashes / 核验记录与权重哈希](docs/evaluation/beit3-a-official-vqa-provenance.json)
 
@@ -153,22 +155,28 @@ BEiT-3 A 在双 T4 上完成 10 轮。第 9 轮最佳权重（step 30763）在 2
 | Upstream implementation license | MIT, per the [Microsoft UniLM repository](https://github.com/microsoft/unilm) |
 | TorchScale source | [`4d1e0e82e5adf86dd424f1463192635b73fc8efc`](https://github.com/microsoft/torchscale/tree/4d1e0e82e5adf86dd424f1463192635b73fc8efc) |
 | Pretrained weights | [`beit3_base_patch16_224.pth`](https://github.com/addf400/files/releases/download/beit3/beit3_base_patch16_224.pth), 554,351,015 bytes |
-| Weights SHA-256 | `12ebc3d487f418d4f0f000d09719edfe7dcc89079da427f5580a7fb86ee3943a` |
+| Upstream pretrained weights SHA-256 | `12ebc3d487f418d4f0f000d09719edfe7dcc89079da427f5580a7fb86ee3943a` |
+| Recommended trained checkpoint | `best.pt`, epoch 9/update 30763, format v4, 2,772,577,872 bytes; not publicly hosted |
+| Recommended trained checkpoint SHA-256 | `31951eb590d1fa4df887deac5c43b90ee5b478126c401ce43476911c1370bab7` |
 | Tokenizer SHA-256 | `6f5e2fefcf793761a76a6bfb8ad35489f9c203b25557673284b6d032f41043f4` |
 | Training plan | A: VQA v2 only; B: screened Visual Genome QA; C: independent seed-123 replication |
-| Status | Implemented; real pretrained load tested locally; automatic T4 micro-batch config and runtime estimate added; actual dual-T4 smoke, full training, and official evaluation pending |
+| Status | A completed; official-toolkit result verified twice. B and C have not run. |
 
 Upstream VQAv2 preprocessing, answer normalization, and the classification-head layout are adapted from Microsoft's [BEiT-3 VQAv2 guide](https://github.com/microsoft/unilm/blob/master/beit3/get_started/get_started_for_vqav2.md) and [official implementation](https://github.com/microsoft/unilm/tree/master/beit3). The base checkpoint is downloaded from the upstream-linked release location and rejected if its expected size or SHA-256 does not match. Kaggle preflight benchmarks per-GPU batches 1/2/4/8, writes a runtime config preserving global batch 128, performs a real distributed checkpoint round-trip, and records a cautious throughput-based epoch/session estimate. The local integration test loaded all 12 encoder layers and verified the 480 px positional-embedding interpolation; these are implementation checks, not training results.
 
 上游 VQAv2 图像预处理、答案规范化和分类头结构参考 Microsoft 的 [BEiT-3 VQAv2 指南](https://github.com/microsoft/unilm/blob/master/beit3/get_started/get_started_for_vqav2.md)及[官方实现](https://github.com/microsoft/unilm/tree/master/beit3)。Base 权重从上游指向的发布地址下载，文件大小或 SHA-256 不匹配时会拒绝加载。Kaggle 预检会测量每卡 batch 1/2/4/8、生成保持全局 batch 128 的运行配置、执行真实分布式 checkpoint 往返验证，并按吞吐记录审慎的 epoch/会话估算。本地集成测试已加载全部 12 层 encoder，并检查 480 px 位置编码插值；这些都只是实现检查，不代表训练结果。
 
-The predeclared acceptance metric is official VQA validation overall score on all 214,354 questions. Internal metrics and partial exports cannot substitute for this gate. A candidate is promoted only after complete prediction-ID matching, repeated official evaluation, and an independent seed replication; until then, none of these configurations replaces the existing release.
+The recommendation is based on the highest verified full-validation score. This does not satisfy the original research targets or replace the existing downloadable release. Internal metrics, partial exports, and repeated evaluation of one model cannot substitute for independent training replication.
 
-预先声明的验收指标为全部 214,354 个问题上的官方 VQA validation overall。内部指标和部分预测不能替代此门槛。候选只有在预测 ID 完整匹配、官方评测可重复，并完成独立 seed 复现后才可晋升；此前任何 BEiT-3 配置都不会替换现有发布版本。
+首选模型依据已核验的最高全量验证分数确定。这不代表原定研究目标已达成，也不替换现有可下载版本。内部指标、部分预测和同一权重的重复评测均不能替代独立训练复现。
 
 ## Runtime Requirements / 运行要求
 
-The release stores trained model parameters and checkpoint-owned preprocessing configuration.
+For BEiT-3, install the optional dependencies with `python -m pip install -e '.[beit3]'`. Use the verified epoch-9 checkpoint with `beit3.spm` beside it; see the [local inference example](README.md#recommended-beit-3-a--首选beit-3-a).
+
+BEiT-3 需安装上述可选依赖，并将 `beit3.spm` 与第 9 轮权重放在同一目录，见[本地推理示例](README.md#recommended-beit-3-a--首选beit-3-a)。
+
+The public ViLT release stores trained model parameters and checkpoint-owned preprocessing configuration.
 Runtime construction also requires the Hugging Face ViLT backbone and processor assets. Cache
 them once in an online environment before using `demo.py --offline`.
 
@@ -182,22 +190,20 @@ python demo.py --checkpoint checkpoints/best.pt
 
 ## Limitations / 局限
 
-- Fixed Top-3000 answer vocabulary cannot represent every valid answer.
+- Fixed answer vocabularies (5,000 answers for BEiT-3, 3,000 for ViLT) cannot represent every valid answer.
 - The default language path expects English questions.
 - COCO/VQA domain bias and annotation bias remain present.
 - Confidence values are classifier scores and are not calibrated guarantees.
-- The `68.42` score is validation-set evaluation, not a held-out evaluation-server result.
+- The `74.22` and `68.42` scores are public validation results, not hidden evaluation-server results.
 
-- 固定 Top-3000 答案词表无法覆盖所有有效答案。
+- 固定答案词表无法覆盖所有有效答案：BEiT-3 为 5,000 条，ViLT 为 3,000 条。
 - 默认语言路径面向英文问题。
 - 仍存在 COCO/VQA 数据域与标注偏差。
 - 置信度是分类器分数，不是经过校准的保证。
-- `68.42` 是验证集评测结果，不是隐藏测试集评测服务器成绩。
+- `74.22` 和 `68.42` 均为公开验证集结果，不是隐藏测试服务器成绩。
 
 ## Security / 安全
 
-PyTorch checkpoints use pickle-based serialization. Download only from the official project
-Release and verify the published SHA256 before loading.
+PyTorch checkpoints use pickle-based serialization. Load only trusted experiment artifacts or official project releases and verify the recorded SHA-256 first.
 
-PyTorch checkpoint 使用基于 pickle 的序列化。请仅从项目官方 Release 下载，并在加载前校验
-发布的 SHA256。
+PyTorch checkpoint 使用基于 pickle 的序列化。仅加载可信实验产物或项目官方发布权重，并先校验记录中的 SHA-256。

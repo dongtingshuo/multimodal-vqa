@@ -6,9 +6,9 @@ VQA Studio 是原生 SwiftUI 视觉问答工作台，与命令行共用 Python �
 
 ## Build / 构建
 
-Requires macOS 14 or newer and a Swift toolchain with a compatible macOS SDK. Install the project Python dependencies first and use a trusted checkpoint. Start with the [recommended ViLT release](../README.md#trained-checkpoint--已训练模型).
+Requires macOS 14 or newer and a Swift toolchain with a compatible macOS SDK. Install the project Python dependencies first. In Settings, select the [recommended BEiT-3 A checkpoint](../README.md#trained-checkpoint--已训练模型) and keep its tokenizer beside it. Use the public ViLT fallback without a local BEiT-3 checkpoint.
 
-需要 macOS 14 或更新版本，以及有兼容 macOS SDK 的 Swift 工具链。先安装项目 Python 依赖并准备可信权重，建议从[推荐的 ViLT 版本](../README.md#trained-checkpoint--已训练模型)开始。
+需要 macOS 14 或更新版本，以及有兼容 macOS SDK 的 Swift 工具链。先安装项目 Python 依赖，然后在设置中选择[首选 BEiT-3 A 权重](../README.md#trained-checkpoint--已训练模型)，将 tokenizer 与权重放在同一目录。没有本地 BEiT-3 权重时使用公开下载的 ViLT 备选。
 
 From the repository root / 在仓库根目录运行：
 

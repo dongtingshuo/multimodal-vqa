@@ -14,9 +14,9 @@ The seed-42 run completed through epoch 7 and stopped under the configured early
 
 seed 42 任务已完成至 epoch 7，并按配置触发早停。epoch 5 是最佳 checkpoint，硬准确率 `0.6126`、内部 VQA score `0.7101`。任务已导出全部 214,354 条验证预测，并通过两个内部门槛。
 
-This completed result is the recommended engineering checkpoint. Official-toolkit evaluation on the public validation annotations is complete at `68.42` overall. This is not a test-dev/test-standard leaderboard submission. Epochs 6-7 show continued train-score gains while validation loss rises and validation VQA declines, so the next experiment must target generalization rather than extend training or simply increase epochs.
+This completed ViLT result is the published comparison baseline and public fallback. Its official-toolkit score on the public validation split is `68.42`, not a test-dev/test-standard leaderboard submission. Epochs 6-7 show training gains while validation loss rises and validation VQA declines, so additional epochs alone are not justified.
 
-该完整结果作为推荐工程 checkpoint。官方 toolkit 已在公开验证标注上完成评测，overall 为 `68.42`；该结果不是 test-dev/test-standard leaderboard 提交成绩。epoch 6-7 的训练分数继续上升，但验证 loss 增大、验证 VQA 下降，因此下一轮应针对泛化问题，而不是单纯增加训练轮数。
+该 ViLT 结果作为已发布的对照基线和公开下载备选。公开验证集官方协议分数为 `68.42`，不是 test-dev/test-standard 榜单成绩。第 6–7 轮训练分数继续上升，但验证损失增大、验证 VQA 下降，因此没有理由单纯增加轮数。
 
 | Item | Value |
 | --- | --- |
@@ -99,9 +99,9 @@ The supported runtime is Python 3.10+ with PyTorch 2.5.1+ and Transformers 4.57.
 
 ### Baseline and target / 基线与目标
 
-The unchanged comparison baseline is the recommended ViLT `v0.3.0` checkpoint at `68.42` official VQA v2 validation overall. The aspirational acceptance target is `>=75.00` for the selected experiment and `>=74.50` for an independent seed replication. These are targets, not predicted outcomes. The validation set is fixed at all 214,354 public questions and is never used for training or vocabulary construction.
+The unchanged comparison baseline is ViLT `v0.3.0` at `68.42` official VQA v2 validation overall. The original research targets are `>=75.00` for the selected experiment and `>=74.50` for an independent seed replication. The validation set is fixed at all 214,354 public questions and is never used for training or vocabulary construction.
 
-固定对照基线为推荐 ViLT `v0.3.0`，官方 VQA v2 验证 overall 为 `68.42`。目标为优选实验 `>=75.00`，独立 seed 复现 `>=74.50`。这是验收目标，不是结果预测。验证集固定为全部 214,354 条公开问题，绝不用于训练或词表构建。
+固定对照基线为 ViLT `v0.3.0`，官方 VQA v2 验证 overall 为 `68.42`。原定研究目标为优选实验 `>=75.00`、独立 seed 复现 `>=74.50`。验证集固定为全部 214,354 条公开问题，不用于训练或词表构建。
 
 ### Experiment matrix / 实验矩阵
 
@@ -145,6 +145,6 @@ Write `latest.pt` every 500 optimizer updates and at each epoch boundary. A resu
 
 ### Official evaluation and promotion / 官方评测与晋升
 
-For each completed candidate, export predictions for all validation IDs, compare the IDs exactly against questions and annotations, and run the upstream VQA Evaluation Toolkit twice with identical output. Report overall plus `yes/no`, `number`, and `other`, full data/config/source hashes, history, curves, and checkpoints. If the acceptance targets are missed, report the actual results without substituting internal VQA metrics, ensembles, a partial split, or a changed protocol. Keep `v0.3.0` recommended until the best A/B run reaches `75.00`, the independent C run reaches `74.50`, and all artifact and evaluation checks pass.
+For each completed candidate, export predictions for all validation IDs, compare the IDs exactly against questions and annotations, and run the upstream VQA Evaluation Toolkit twice with identical output. Report overall plus `yes/no`, `number`, and `other`, data/config/source hashes, history, curves, and checkpoints. If research targets are missed, report the actual results without substituting internal metrics, ensembles, a partial split, or a changed protocol. The model recommendation follows the highest verified score and is separate from public weight availability or a claim that the research targets were met.
 
-每个完成的候选模型都须导出全部验证 ID 的预测，与 questions 和 annotations 精确比对，并运行上游 VQA Evaluation Toolkit 两次且结果一致。报告 overall、`yes/no`、`number`、`other`、完整数据/配置/来源哈希、训练历史、曲线与 checkpoint。若未达验收目标，按实际结果报告，不得以内部 VQA 指标、集成、部分数据或修改协议替代。优选 A/B 达到 `75.00`、独立 C 达到 `74.50` 且所有产物/评测检查通过前，`v0.3.0` 始终为推荐版本。
+每个完成的候选模型都须导出全部验证 ID 的预测，与问题和标注精确比对，并运行上游 VQA Evaluation Toolkit 两次且结果一致。报告 overall、`yes/no`、`number`、`other`、数据/配置/来源哈希、训练历史、曲线与 checkpoint。若未达研究目标，按实际结果报告，不以内部指标、集成、部分数据或修改协议替代。首选模型以已核验的最高分为依据，与权重是否公开以及研究目标是否达成分别说明。

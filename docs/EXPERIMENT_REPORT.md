@@ -481,9 +481,9 @@ Each run uses up to 10 epochs, full-backbone fine-tuning, AdamW with backbone LR
 
 ### Acceptance and promotion / 验收与晋升
 
-The aspirational target is at least `75.00` official VQA validation overall for the selected A/B run and at least `74.50` for the independent C replication. These are acceptance targets, not promised outcomes. Every selected model must export predictions for exactly all 214,354 validation question IDs and pass the upstream VQA Evaluation Toolkit twice with identical results. Report overall and answer-type metrics, source/config/data fingerprints, and all artifacts. If thresholds are missed, record the measured result and likely failure evidence; do not substitute internal accuracy, partial validation, ensemble results, or a changed split. The current `68.42` ViLT release remains recommended until all gates pass.
+The original research targets were at least `75.00` official VQA validation overall for the selected A/B run and `74.50` for the independent C replication. Every selected model must export predictions for exactly all 214,354 validation question IDs and pass the upstream VQA Evaluation Toolkit twice with identical results. Report overall and answer-type metrics, source/config/data fingerprints, and artifacts. If thresholds are missed, record the measured result without substituting internal accuracy, partial validation, ensembles, or a changed split.
 
-目标为优选 A/B 官方 VQA 验证 overall 至少 `75.00`，并要求独立 C 复现至少 `74.50`。这属于验收目标，不是结果承诺。每个候选模型必须导出 question ID 与官方验证集 214,354 条完全一致的预测，并通过上游 VQA Evaluation Toolkit 两次且结果相同。报告 overall、答案类型指标、数据/配置/来源指纹和全部产物。未达标时如实记录测量结果和失败证据，不得以内部准确率、部分验证、集成结果或更换数据划分代替。所有门槛通过前，当前 `68.42` 的 ViLT Release 仍为推荐版本。
+原定研究目标为优选 A/B 官方 VQA 验证 overall 至少 `75.00`，独立 C 复现至少 `74.50`。每个候选模型必须导出 question ID 与 214,354 条官方验证题完全一致的预测，并通过上游 VQA Evaluation Toolkit 两次且结果相同。报告 overall、答案类型指标、数据/配置/来源指纹及产物。未达标时记录实际结果，不以内部准确率、部分验证、集成结果或更换数据划分代替。
 
 下载的 Version 34 结果目录中 `best.pt` 为 0 字节。最终选用已验证的 Version 33 epoch 4 checkpoint 恢复权重，其配置和 Version 34 选中指标一致；SHA-256 为 `947551915da46f6225f2574c217728b8125491608fa55a54aabd8625fd5561c5`。V34 epoch 6 的 `latest.pt` 是续训状态，并非选中的最佳 checkpoint。评测数据指纹：questions SHA-256 `f34d9c9909dea76700d361baddd63dd47b4494945097459b542d9fe840244811`；annotations SHA-256 `0564650e712b34c246e4ad142894692bf2e45dee8e9cc6ebb2cedbe85731c4bf`；predictions SHA-256 `febdf25cc960dd509e823af025d367020ddfcc328ab74dacb38c4a67ccf886b1`。
 ## BEiT-3 A Final Result / BEiT-3 A 最终结果
@@ -501,7 +501,7 @@ The selected checkpoint scored 58.60 on number, 66.39 on other, and 89.95 on yes
 
 最佳权重的 number、other、yes/no 分别为 58.60、66.39、89.95。总分较已发布 ViLT 高 5.80 分，距原定 75.00 差 0.78 分。第 10 轮训练损失从 2.10055 降到 2.08157，验证准确率仍约 0.66667，验证损失仍约 3.27562。保存的骨干和分类头学习率分别为 3e-13 和 6e-12。指标停滞与原调度下的表现一致，但没有消融实验确认原因。
 
-Experiment A is closed at the verified score. B and C have not been run; no hidden test-server result or independent training replication is claimed. ViLT remains the recommended downloadable release. / 实验 A 以核验成绩收尾。B 和 C 未执行，不宣称隐藏测试服务器成绩或独立训练复现；推荐下载仍为 ViLT。
+Experiment A is closed at the verified score and its epoch-9 checkpoint is recommended as the best measured model. B and C have not run; the original targets were not met, and no hidden test-server result or independent training replication is claimed. ViLT remains available as a public fallback. / 实验 A 以核验成绩收尾，第 9 轮权重因实测分数最高成为首选。B 和 C 未执行，原目标未达到，不宣称隐藏测试服务器成绩或独立训练复现。ViLT 保留为公开下载备选。
 
 [Official metrics / 官方分项](evaluation/beit3-a-official-vqa-metrics.json) · [Provenance / 核验记录](evaluation/beit3-a-official-vqa-provenance.json) · [Epoch history / 逐轮指标](evaluation/beit3-a-training-history.csv) · [Training curves / 训练曲线](evaluation/beit3-a-training-curves.png)
 

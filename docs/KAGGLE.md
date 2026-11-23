@@ -80,9 +80,9 @@ Kaggle 训练不需要 W&B 或 Kaggle Secrets。训练过程和最终结果会�
 
 ## BEiT-3 Experiments / BEiT-3 实验
 
-The BEiT-3 route is separate from the recommended ViLT release. Do not start a full run until the code revision is pushed and pinned in `GIT_REF`, the complete VQA/COCO dataset passes strict validation, and both T4 GPUs pass the capacity and checkpoint smoke gates below. Enable Kaggle Internet for the first run so it can install the pinned source dependency and download the 554 MB pretrained checkpoint plus tokenizer; alternatively, pre-populate the configured BEiT-3 cache. The optional dependencies are isolated from existing model paths:
+The BEiT-3 route is separate from the public ViLT fallback. Do not start a full run until the code revision is pushed and pinned in `GIT_REF`, the complete VQA/COCO dataset passes strict validation, and both T4 GPUs pass the capacity and checkpoint smoke gates below. Enable Kaggle Internet for the first run so it can install the pinned source dependency and download the 554 MB pretrained checkpoint plus tokenizer; alternatively, pre-populate the configured BEiT-3 cache. The optional dependencies are isolated from existing model paths:
 
-BEiT-3 路线与当前推荐的 ViLT 发布版本相互独立。在代码 revision 已推送并通过 `GIT_REF` 固定、完整 VQA/COCO 数据通过严格校验、两张 T4 均通过下述容量和 checkpoint smoke 门槛前，不要启动全量训练。首次运行需在 Kaggle 启用 Internet，以安装固定源码依赖并下载约 554 MB 的预训练权重及 tokenizer；也可预先填充配置的 BEiT-3 缓存目录。BEiT-3 依赖为可选项，不影响现有模型路径：
+BEiT-3 路线与公开下载的 ViLT 备选相互独立。在代码 revision 已推送并通过 `GIT_REF` 固定、完整 VQA/COCO 数据通过严格校验、两张 T4 均通过下述容量和 checkpoint smoke 门槛前，不要启动全量训练。首次运行需在 Kaggle 启用 Internet，以安装固定源码依赖并下载约 554 MB 的预训练权重及 tokenizer；也可预先填充配置的 BEiT-3 缓存目录。BEiT-3 依赖为可选项，不影响现有模型路径：
 
 ```bash
 python -m pip install -e ".[beit3]"

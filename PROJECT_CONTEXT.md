@@ -33,8 +33,8 @@ Maintain a reproducible PyTorch visual question answering system for VQA v2.0 an
 - Training data: VQA v2.0 questions/annotations plus COCO 2014 `train2014` and `val2014` images. Keep datasets outside Git.
 - Kaggle COCO sources: when no complete image mount is available, the runner downloads the official `train2014.zip` and `val2014.zip` from COCO's S3 host into `/tmp`; the download is resumable within a running session.
 - Optional private pack kernels: `dongtingshuo/multimodal-vqa-coco-train-pack` and `dongtingshuo/multimodal-vqa-coco-val-pack`. Their outputs are not attached to the main training kernel because Kaggle worker-side input mounts proved intermittent.
-- Recommended published checkpoint: ViLT seed 42, release `v0.3.0`; see `README.md` and `docs/evaluation/` for metrics and provenance.
-- Experimental candidate: BEiT-3 Base, initialized from the generic pretrained backbone. VQA-only Experiment A completed 10 epochs on dual T4. Its selected epoch-9 checkpoint gives reproducible official-toolkit public validation overall 74.22 on all 214,354 questions. The 75.00 target was not met; B and C were not run. See `docs/evaluation/beit3-a-official-vqa-provenance.json` and `docs/EXPERIMENT_REPORT.md`.
+- Recommended model: BEiT-3 Base A, epoch 9/update 30763, the highest verified public-validation score (74.22 over 214,354 questions). The VQA-only run used generic pretrained weights and finished 10 epochs on dual T4. The 75.00 research target was not met; B and C were not run. See `docs/evaluation/beit3-a-official-vqa-provenance.json` and `docs/EXPERIMENT_REPORT.md`.
+- Public fallback: ViLT seed 42, release `v0.3.0`, official validation score 68.42. Its download script and defaults remain compatible.
 
 ## Runtime and Tests / 运行与测试
 
@@ -46,7 +46,7 @@ Maintain a reproducible PyTorch visual question answering system for VQA v2.0 an
 
 ## Current Status and Decisions / 当前状态与决策
 
-- Experiment A is closed at 74.22. The source commit, recovery patch digest, dataset/checkpoint hashes, and two matching official-toolkit results are recorded in public provenance. `best.pt` is epoch 9/update 30763; `latest.pt` is the completed epoch 10/update 34181 state. Weights and raw data remain out of Git, and ViLT v0.3.0 remains the recommended downloadable release.
+- Experiment A is closed at 74.22. The source commit, recovery patch digest, dataset/checkpoint hashes, and two matching official-toolkit results are recorded in public provenance. Recommend the epoch-9 `best.pt` over the completed epoch-10 `latest.pt`. The BEiT-3 weight is not publicly hosted; recommend by validation score without changing the original experiment targets or ViLT release artifacts.
 - VQA Studio source, icon sources, packaging and test entry points are versioned; locally compiled app bundles, personal library data and development outputs are not distributed in Git.
 
 - Directly attaching the raw COCO Dataset and attaching packed Notebook outputs both produced intermittent worker-side mount failures before Python startup. The main training kernel therefore has no `dataset_sources` or `kernel_sources`.
@@ -73,11 +73,11 @@ Maintain a reproducible PyTorch visual question answering system for VQA v2.0 an
 - Version 43 已确认失败；Version 44 限时诊断正常保存并暂停，完成 334 次更新，没有完整 epoch 或官方分数。宿主内存压力不能直接认定为旧版本中断原因。
 - Training resume now reads checkpoints on CPU with memory mapping for modern ZIP checkpoints (legacy pickle fallback retained), restores model/optimizer/scheduler/AMP/RNG, then drops the checkpoint payload before training. This avoids retaining an additional checkpoint-sized GPU allocation per rank. Version 46 verified GPU continuation and recovery saves through global step 3,000. The four-hour distributed collective timeout fixes its validation-wait failure mode.
 - Latest local verification: 130 tests passed in the existing `pytorch` environment (Python 3.9, below the declared Python 3.10 minimum); 5 upstream deprecation warnings remain. Coverage includes checkpoint tensor release, cgroup v1/v2 readings, initial/periodic recovery boundaries, and fresh/resumed dual-process accumulation over two epochs with equivalent-global-batch comparisons. Ruff on changed Python files and `git diff --check` passed. Earlier checks verified the SentencePiece tokenizer, model factory, CPU pretrained forward, and wheel build.
-- Do not resume the same run under the current early-stopping configuration: epoch 6 is a completed early-stop state and validation did not improve. Keep the recommended checkpoint unchanged unless a controlled experiment exceeds its official validation score and internal metrics; document any revised training strategy before launching another run.
+- Do not resume that ViLT run under the current early-stopping configuration: epoch 6 is a completed early-stop state and validation did not improve. Document any revised training strategy before launching another run.
 - Keep existing untracked `artifacts/` user data; do not clean it as part of routine work.
 
 ## Prioritized TODO / 优先事项
 
 1. Preserve the completed A experiment as the comparison baseline. B (screened Visual Genome) and C (independent seed) remain optional future experiments; do not extend the completed A schedule.
-2. Keep ViLT `v0.3.0` recommended unless the documented BEiT-3 promotion gates are satisfied.
+2. Keep benchmark-based recommendations separate from public downloads; publish a downloadable BEiT-3 asset only as a separate release task.
 3. Keep the macOS build and local inference workflow reproducible. Treat a notarized standalone distribution as a separate release task.
